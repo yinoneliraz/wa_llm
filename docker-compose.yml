@@ -1,0 +1,44 @@
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: webhook_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  web-server:
+    build: .
+    command: uv run main.py
+    volumes:
+      - .:/app
+    ports:
+      - "8000:8000"
+    depends_on:
+      - postgres
+    environment:
+      - DATABASE_URL=postgresql://user:password@postgres:5432/webhook_db
+
+  whatsapp:
+    image: aldinokemal2104/go-whatsapp-web-multidevice
+    container_name: whatsapp
+    ports:
+      - "3000:3000"
+    restart: always
+    volumes:
+      - whatsapp:/app/storages
+    # --basic-auth=kemal:secret,toni:password,userName:secretPassword
+    # --webhook="https://webhook.site/185fe13d-1fe1-40e7-ad5f-21899da596ef"
+    command: >
+      --webhook="http://web-server:8000/webhook"
+      
+
+volumes:
+  whatsapp:
+    name: whatsapp
+  postgres_data:
+    name: postgres_data

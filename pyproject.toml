@@ -1,0 +1,28 @@
+[project]
+name = "wa-llm"
+version = "0.1.0"
+description = ""
+requires-python = ">=3.12"
+dependencies = [
+    "pydantic>=2.6.1",
+    "psycopg2-binary>=2.9.9",
+    "python-dotenv>=1.0.0",
+    "flask>=3.1.0",
+]
+
+[tool.black]
+line-length = 88
+target-version = ['py312']
+
+[tool.ruff]
+select = ["E", "F", "B", "I"]
+ignore = ["E501"]
+target-version = "py311"
+
+[tool.pyright]
+typeCheckingMode = "strict"
+
+[dependency-groups]
+dev = [
+    "ruff>=0.8.6",
+]
