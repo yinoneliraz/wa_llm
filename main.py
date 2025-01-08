@@ -1,4 +1,4 @@
-from flask import Flask, request, Response
+from flask import Flask, request, Response, jsonify, make_response
 import psycopg2
 from psycopg2.extras import DictCursor
 from psycopg2.extensions import connection
@@ -50,9 +50,12 @@ def webhook() -> Response:
         payload = request.get_json()
         
         if not payload:
-            return jsonify({'error': 'No payload received'}), 400
+            return make_response(jsonify({'error': 'No payload received'}), 400)
 
-        return 'Hello, test'
+        return make_response(jsonify({
+            'status': 'success',
+            'message': 'Hello, test'
+        }), 200)
 
         with get_db_connection() as conn:
             with conn.cursor() as cur:
@@ -63,17 +66,17 @@ def webhook() -> Response:
                 webhook_id = cur.fetchone()[0]
                 conn.commit()
         
-        return jsonify({
+        return make_response(jsonify({
             'status': 'success',
             'message': 'Webhook received and stored',
             'id': webhook_id
-        }), 200
+        }), 200)
         
     except Exception as e:
-        return jsonify({
+        return make_response(jsonify({
             'error': 'Failed to process webhook',
             'message': str(e)
-        }), 500
+        }), 500)
 
 @app.route('/messages', methods=['GET'])
 def get_messages() -> Response:
@@ -90,10 +93,10 @@ def get_messages() -> Response:
         return jsonify(messages)
         
     except Exception as e:
-        return jsonify({
+        return make_response(jsonify({
             'error': 'Failed to retrieve messages',
             'message': str(e)
-        }), 500
+        }), 500)
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", "5000"))
