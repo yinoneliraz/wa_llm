@@ -1,9 +1,11 @@
 from flask import Flask, request, jsonify
 import psycopg2
 from psycopg2.extras import DictCursor
+from psycopg2.extensions import connection
 from datetime import datetime
 import os
 from dotenv import load_dotenv
+from flask.typing import ResponseReturnValue
 
 load_dotenv()
 app = Flask(__name__)
@@ -17,7 +19,7 @@ DB_CONFIG = {
     'port': os.getenv('DB_PORT', '5432')
 }
 
-def get_db_connection():
+def get_db_connection() -> connection:
     return psycopg2.connect(**DB_CONFIG)
 
 def init_db():
@@ -39,11 +41,11 @@ except Exception as e:
     print(f"Failed to initialize database: {e}")
 
 @app.route('/')
-def hello_world():
+def hello_world() -> str:
     return 'Hello, World!'
 
 @app.route('/webhook', methods=['POST'])
-def webhook():
+def webhook() -> ResponseReturnValue:
     try:
         payload = request.get_json()
         
@@ -72,7 +74,7 @@ def webhook():
         }), 500
 
 @app.route('/messages', methods=['GET'])
-def get_messages():
+def get_messages() -> ResponseReturnValue:
     try:
         with get_db_connection() as conn:
             with conn.cursor(cursor_factory=DictCursor) as cur:
@@ -92,6 +94,6 @@ def get_messages():
         }), 500
 
 if __name__ == "__main__":
-    port = os.environ.get("PORT",5000)
+    port = int(os.environ.get("PORT", "5000"))
     host = os.environ.get("HOST", "0.0.0.0")
-    app.run(debug=True,host=host, port=port)
+    app.run(debug=True, host=host, port=port)
