@@ -1,14 +1,13 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, Response
 import psycopg2
 from psycopg2.extras import DictCursor
 from psycopg2.extensions import connection
 from datetime import datetime
 import os
 from dotenv import load_dotenv
-from flask.typing import ResponseReturnValue
 
 load_dotenv()
-app = Flask(__name__)
+app: Flask = Flask(__name__)
 
 # Database configuration
 DB_CONFIG = {
@@ -22,7 +21,7 @@ DB_CONFIG = {
 def get_db_connection() -> connection:
     return psycopg2.connect(**DB_CONFIG)
 
-def init_db():
+def init_db() -> None:
     with get_db_connection() as conn:
         with conn.cursor() as cur:
             cur.execute('''
@@ -45,13 +44,16 @@ def hello_world() -> str:
     return 'Hello, World!'
 
 @app.route('/webhook', methods=['POST'])
-def webhook() -> ResponseReturnValue:
+def webhook() -> Response:
+
     try:
         payload = request.get_json()
         
         if not payload:
             return jsonify({'error': 'No payload received'}), 400
-        
+
+        return 'Hello, test'
+
         with get_db_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(
@@ -74,7 +76,7 @@ def webhook() -> ResponseReturnValue:
         }), 500
 
 @app.route('/messages', methods=['GET'])
-def get_messages() -> ResponseReturnValue:
+def get_messages() -> Response:
     try:
         with get_db_connection() as conn:
             with conn.cursor(cursor_factory=DictCursor) as cur:
