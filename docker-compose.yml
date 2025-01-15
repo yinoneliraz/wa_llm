@@ -13,11 +13,10 @@ services:
 
   web-server:
     build: .
-    command: uv run main.py
     volumes:
-      - .:/app
+      - ./src:/src
     ports:
-      - "8000:8000"
+      - "5001:5001"
     depends_on:
       - postgres
     environment:

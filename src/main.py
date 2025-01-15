@@ -7,6 +7,10 @@ import os
 from dotenv import load_dotenv
 
 load_dotenv()
+
+port = int(os.getenv("PORT", "5001"))
+host = os.environ.get("HOST", "0.0.0.0")
+print(f"test Running on {host}:{port}")
 app: Flask = Flask(__name__)
 
 # Database configuration
@@ -99,6 +103,5 @@ def get_messages() -> Response:
         }), 500)
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", "5000"))
-    host = os.environ.get("HOST", "0.0.0.0")
+
     app.run(debug=True, host=host, port=port)
