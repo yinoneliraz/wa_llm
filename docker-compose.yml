@@ -14,13 +14,13 @@ services:
   web-server:
     build: .
     volumes:
-      - ./src:/src
+      - ./src:/app/src
     ports:
-      - "5001:5001"
+      - "8000:8000"
     depends_on:
       - postgres
     environment:
-      - DATABASE_URL=postgresql://user:password@postgres:5432/webhook_db
+      - DB_HOST=postgres
 
   whatsapp:
     image: aldinokemal2104/go-whatsapp-web-multidevice

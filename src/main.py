@@ -56,11 +56,6 @@ def webhook() -> Response:
         if not payload:
             return make_response(jsonify({'error': 'No payload received'}), 400)
 
-        return make_response(jsonify({
-            'status': 'success',
-            'message': 'Hello, test'
-        }), 200)
-
         with get_db_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(
@@ -70,6 +65,13 @@ def webhook() -> Response:
                 webhook_id = cur.fetchone()[0]
                 conn.commit()
         
+        print(f"webhook_id is {webhook_id}, payload is {payload}")
+
+        # if I am in the message mention then:
+        # if the message includes "hey @username" I reply "who calls my name music"
+        # if the message includes "hey @username" I reply "its the voice of my mother"
+        # if the message includes "someone is looking for you on the phone" If its not I don't aggrees "
+
         return make_response(jsonify({
             'status': 'success',
             'message': 'Webhook received and stored',
@@ -84,6 +86,7 @@ def webhook() -> Response:
 
 @app.route('/messages', methods=['GET'])
 def get_messages() -> Response:
+
     try:
         with get_db_connection() as conn:
             with conn.cursor(cursor_factory=DictCursor) as cur:
