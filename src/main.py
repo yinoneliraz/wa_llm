@@ -1,7 +1,6 @@
 from flask import Flask, request, Response, jsonify, make_response
 import psycopg2
 from psycopg2.extras import DictCursor
-from psycopg2.extensions import connection
 from datetime import datetime
 import os
 from dotenv import load_dotenv

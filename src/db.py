@@ -15,6 +15,7 @@ DB_CONFIG = {
 def get_db_connection() -> connection:
     return psycopg2.connect(**DB_CONFIG)
 
+
 def init_db() -> None:
     with get_db_connection() as conn:
         with conn.cursor() as cur:
