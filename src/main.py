@@ -1,10 +1,9 @@
 from flask import Flask, request, Response, jsonify, make_response
 import psycopg2
-from psycopg2.extras import DictCursor
 from datetime import datetime
 import os
 from dotenv import load_dotenv
-from db import get_db_connection, init_db
+from db import get_db_connection, init_db, get_messages_from_db 
 load_dotenv()
 
 port = int(os.getenv("PORT", "5001"))
@@ -65,15 +64,7 @@ def webhook() -> Response:
 def get_messages() -> Response:
 
     try:
-        with get_db_connection() as conn:
-            with conn.cursor(cursor_factory=DictCursor) as cur:
-                cur.execute('''
-                    SELECT id, payload, timestamp 
-                    FROM webhook_messages 
-                    ORDER BY timestamp DESC
-                ''')
-                messages = [dict(row) for row in cur.fetchall()]
-        
+        messages = get_messages_from_db()
         return jsonify(messages)
         
     except Exception as e:

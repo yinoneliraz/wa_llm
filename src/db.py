@@ -27,3 +27,26 @@ def init_db() -> None:
                 )
             ''')
         conn.commit()
+
+def get_messages_from_db() -> list[dict]:
+    print(f"getting it")
+
+    with get_db_connection() as conn:
+        with conn.cursor(cursor_factory=DictCursor) as cur:
+            cur.execute('''
+                SELECT id, payload, timestamp 
+                FROM webhook_messages 
+                ORDER BY timestamp DESC
+            ''')
+            # messages = [dict(row) for row in cur.fetchall()]
+            messages = [
+                    {
+                        'id': row[0],
+                        'payload': row[1],
+                        'timestamp': row[2].isoformat()
+                    }
+                    for row in cur.fetchall()
+                ]
+
+    print(f"messages are {messages}")
+    return messages
