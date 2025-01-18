@@ -3,6 +3,7 @@ import psycopg2
 from psycopg2.extras import DictCursor
 from psycopg2.extensions import connection
 from datetime import datetime
+from typing import Any
 
 DB_CONFIG = {
     'dbname': os.getenv('DB_NAME', 'your_database'),
@@ -52,7 +53,7 @@ def get_messages_from_db() -> list[dict]:
     print(f"messages are {messages}")
     return messages
 
-def store_message(payload: dict) -> int:  
+def store_message(payload: dict[str, Any]) -> int:  
     with get_db_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
