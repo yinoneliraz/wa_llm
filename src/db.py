@@ -2,6 +2,7 @@ import os
 import psycopg2
 from psycopg2.extras import DictCursor
 from psycopg2.extensions import connection
+from datetime import datetime
 
 DB_CONFIG = {
     'dbname': os.getenv('DB_NAME', 'your_database'),
@@ -50,3 +51,15 @@ def get_messages_from_db() -> list[dict]:
 
     print(f"messages are {messages}")
     return messages
+
+def store_message(payload: dict) -> int:  
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                'INSERT INTO webhook_messages (payload, timestamp) VALUES (%s, %s) RETURNING id',
+                (psycopg2.extras.Json(payload), datetime.utcnow())
+            )
+            message_id = cur.fetchone()[0]
+            conn.commit()
+    print(f"message_id is {message_id}, payload is {payload}")
+    return message_id
