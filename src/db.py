@@ -64,3 +64,24 @@ def store_message(payload: dict[str, Any]) -> int:
             conn.commit()
     print(f"message_id is {message_id}, payload is {payload}")
     return message_id
+
+
+def get_n_latest_messages_from_channel(channel: str, n: int) -> list[dict]:
+    with get_db_connection() as conn:
+        with conn.cursor(cursor_factory=DictCursor) as cur:
+            cur.execute('''
+                SELECT payload->'message'->'text' 
+                FROM webhook_messages
+                WHERE (payload->>'from')::text = %s
+                ORDER BY timestamp DESC
+                LIMIT %s
+            ''', (channel, str(n)))
+
+            messages = [
+                    {
+                        'message': row[0]
+                    }
+                    for row in cur.fetchall()
+                ]
+    
+    return messages

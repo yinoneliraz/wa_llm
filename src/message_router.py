@@ -1,8 +1,9 @@
 import os
+import json
 from claude_wrapper import prompt
 from webhook_logic_pydantic import WebhookMessage
 from wa_whatsapp_web_wrapper import send_whatsapp_message, WhatsAppMessage
-
+from db import get_n_latest_messages_from_channel
 def route_message(message: WebhookMessage) -> None:
 
     # if I am in the message mention then:
@@ -14,10 +15,10 @@ def route_message(message: WebhookMessage) -> None:
     # if the message includes "hey @username" I reply "its the voice of my mother"
     # if the message includes "someone is looking for you on the phone" If its not I don't aggrees "
 
-        if "summarize 5" in message.message.text:
-            #call claude api
-            # claude = init_claude(os.getenv("ANTHROPIC_API_KEY"))
-            response = prompt(message.message.text)
+        if "summarize" in message.message.text:
+            messages = get_n_latest_messages_from_channel(message.from_, 5)
+            messages_str = json.dumps(messages)
+            response = prompt(messages_str, "Please summarize the following messages in a few words")
             send_whatsapp_message(WhatsAppMessage(phone=message.from_, message=response))
 
 
