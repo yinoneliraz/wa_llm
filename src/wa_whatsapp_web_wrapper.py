@@ -7,6 +7,16 @@ class WhatsAppMessage(BaseModel):
     phone: str
     message: str
 
+class WhatsAppDevice(BaseModel):
+    name: str
+    #  Will end with @s.whatsapp.net
+    device: str
+
+class WhatsAppDevicesResponse(BaseModel):
+    code: str
+    message: str
+    results: list[WhatsAppDevice]
+ 
 host = os.getenv("WHATSAPP_HOST")
 
 def send_whatsapp_message(message: WhatsAppMessage) -> Dict[str, Any]:
@@ -40,4 +50,32 @@ def send_whatsapp_message(message: WhatsAppMessage) -> Dict[str, Any]:
                 
     except requests.RequestException as e:
         print(f"Error sending WhatsApp message: {str(e)}")
+        raise
+
+def get_whatsapp_devices() -> WhatsAppDevicesResponse:
+    """
+    Get information about connected WhatsApp devices/sessions.
+    
+    Returns:
+        WhatsAppDevicesResponse containing the device information
+    
+    Raises:
+        requests.RequestException: If the request fails
+        ValidationError: If the response doesn't match the expected schema
+    """
+    headers = {
+        "Accept": "application/json, text/plain, */*",
+    }
+
+    try:
+        response = requests.get(
+            f"{host}/app/devices",
+            headers=headers,
+            timeout=10  # 10 seconds timeout
+        )
+        response.raise_for_status()
+        return WhatsAppDevicesResponse.model_validate(response.json())
+                
+    except requests.RequestException as e:
+        print(f"Error getting WhatsApp devices: {str(e)}")
         raise

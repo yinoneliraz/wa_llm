@@ -66,24 +66,23 @@ def store_message(payload: dict[str, Any]) -> int:
     return message_id
 
 
-def get_n_latest_messages_from_channel(channel: str, n: int) -> list[dict]:
+def get_n_latest_messages_from_channel(phone: str, group_name: str, n: int) -> list[dict]:
     with get_db_connection() as conn:
         with conn.cursor(cursor_factory=DictCursor) as cur:
             cur.execute('''
                 SELECT payload->'message'->'text' 
                 FROM webhook_messages
-                WHERE (payload->>'from')::text = %s
+                WHERE payload->>'from' ILIKE %s AND payload->>'from' ILIKE %s
                         -- filter out rows that are not messages
-                        AND payload -> 'message' IS NOT NULL 
+                        AND payload ->> 'message' IS NOT NULL 
                 ORDER BY timestamp DESC
                 LIMIT %s
-            ''', (channel, str(n)))
+            ''', (f'%{phone}%', f'%{group_name}%', str(n)))
 
             messages = [
-                    {
-                        'message': row[0]
-                    }
+                    
+                    row[0]
+                    
                     for row in cur.fetchall()
                 ]
-    
     return messages
