@@ -1,66 +1,89 @@
-from flask import Flask, request, Response, jsonify, make_response
+from fastapi import FastAPI, HTTPException, Response
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel
+from typing import Optional, Dict, Any
 import os
 from dotenv import load_dotenv
 from db import init_db, get_messages_from_db
 from webhook_logic import webhook_logic
+
 load_dotenv()
 
-port = int(os.getenv("PORT", "5001"))
-host = os.environ.get("HOST", "0.0.0.0")
-print(f"test Running on {host}:{port}")
-app: Flask = Flask(__name__)
+# Initialize FastAPI app
+app = FastAPI(title="Webhook API")
 
+# Pydantic models for request/response validation
+class WebhookResponse(BaseModel):
+    status: str
+    message: str
+    id: int
 
-# Initialize database on startup
-try:
-    init_db()
-except Exception as e:
-    print(f"Failed to initialize database: {e}")
+class ErrorResponse(BaseModel):
+    error: str
+    message: Optional[str] = None
+    details: Optional[str] = None
 
-@app.route('/')
-def hello_world() -> str:
-    return 'Hello, World!'
-
-@app.route('/webhook', methods=['POST'])
-def webhook() -> Response:
-
+# Startup event
+@app.on_event("startup")
+async def startup_event():
     try:
-        payload = request.get_json()
-        
+        init_db()
+    except Exception as e:
+        print(f"Failed to initialize database: {e}")
+
+@app.get("/")
+async def hello_world() -> str:
+    return "Hello, World!"
+
+@app.post("/webhook", response_model=WebhookResponse)
+async def webhook(payload: Dict[str, Any]) -> WebhookResponse:
+    try:
         if not payload:
-            return make_response(jsonify({'error': 'No payload received'}), 400)
+            raise HTTPException(
+                status_code=400, 
+                detail="No payload received"
+            )
 
         message_id = webhook_logic(payload)
-
-        return make_response(jsonify({
-            'status': 'success',
-            'message': 'Webhook received and stored and handled',
-            'id': message_id
-        }), 200)
+        
+        return WebhookResponse(
+            status="success",
+            message="Webhook received and stored and handled",
+            id=message_id
+        )
+    
     except ValueError as validation_error:
-        return make_response(jsonify({
-            'error': 'Invalid message format',
-            'details': str(validation_error)
-        }), 400)
+        raise HTTPException(
+            status_code=400,
+            detail=str(validation_error)
+        )
     except Exception as e:
-        return make_response(jsonify({
-            'error': 'Failed to process webhook',
-            'message': str(e)
-        }), 500)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to process webhook: {str(e)}"
+        )
 
-@app.route('/messages', methods=['GET'])
-def get_messages() -> Response:
-
+@app.get("/messages")
+async def get_messages() -> list:
     try:
         messages = get_messages_from_db()
-        return jsonify(messages)
-        
+        return messages
     except Exception as e:
-        return make_response(jsonify({
-            'error': 'Failed to retrieve messages',
-            'message': str(e)
-        }), 500)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to retrieve messages: {str(e)}"
+        )
 
 if __name__ == "__main__":
-
-    app.run(debug=True, host=host, port=port)
+    import uvicorn
+    
+    port = int(os.getenv("PORT", "5001"))
+    host = os.environ.get("HOST", "0.0.0.0")
+    print(f"Running on {host}:{port}")
+    
+    uvicorn.run(
+        "main:app",
+        host=host,
+        port=port,
+        reload=True
+    )
