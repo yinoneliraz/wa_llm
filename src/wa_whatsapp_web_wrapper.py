@@ -1,7 +1,9 @@
-import os
 from typing import Dict, Any
 import requests
 from pydantic import BaseModel
+from config import Settings
+
+
 
 class WhatsAppMessage(BaseModel):
     phone: str
@@ -17,7 +19,8 @@ class WhatsAppDevicesResponse(BaseModel):
     message: str
     results: list[WhatsAppDevice]
  
-host = os.getenv("WHATSAPP_HOST")
+settings = Settings()
+host = settings.WHATSAPP_HOST
 
 def send_whatsapp_message(message: WhatsAppMessage) -> Dict[str, Any]:
     """

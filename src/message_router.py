@@ -1,9 +1,11 @@
-import os
 import json
 from claude_wrapper import prompt
 from webhook_logic_pydantic import WebhookMessage
 from wa_whatsapp_web_wrapper import send_whatsapp_message, WhatsAppMessage
 from db import get_n_latest_messages_from_channel
+from config import Settings
+
+settings = Settings()
 
 def route_message(message: WebhookMessage) -> None:
     phone = extract_number_from_webhook_message(message)
@@ -30,7 +32,7 @@ def check_if_i_am_mentioned(message: str) -> bool:
 
     # TODO: migrate from using my number from from env variable to /devices endpoint.
     # at least validate that the message is from a device that is connected to my number
-    MY_NUMBER = os.getenv("MY_NUMBER")
+    MY_NUMBER = settings.MY_NUMBER
     
     return f"@{MY_NUMBER}" in message
 
