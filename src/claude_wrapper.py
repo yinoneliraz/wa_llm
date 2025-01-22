@@ -21,7 +21,7 @@ def prompt(message: str, system: str = "You are a helpful assistant") -> str:
             "content": message
         }]
     )
-
+    print(f"message is {message}, system is {system}, response is {response}")
     # Get Claude's response
     if not response.content:
         return ""

@@ -73,6 +73,8 @@ def get_n_latest_messages_from_channel(channel: str, n: int) -> list[dict]:
                 SELECT payload->'message'->'text' 
                 FROM webhook_messages
                 WHERE (payload->>'from')::text = %s
+                        -- filter out rows that are not messages
+                        AND payload -> 'message' IS NOT NULL 
                 ORDER BY timestamp DESC
                 LIMIT %s
             ''', (channel, str(n)))

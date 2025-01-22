@@ -7,7 +7,9 @@ def webhook_logic(payload: dict[str, Any]) -> int:
 
     message = WebhookMessage.model_validate(payload)
 
-    message_id = store_message(message.model_dump(by_alias=True))
+    # we save the raw message to the db to keep any extra data that was not parsed
+    # intead of stroe_message(message.model_dump(by_alias=True)
+    message_id = store_message(payload)
     print(f"message_id is {message_id}, payload is {payload}")
 
     # Only route if there's a message content

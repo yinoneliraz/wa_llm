@@ -4,6 +4,7 @@ from claude_wrapper import prompt
 from webhook_logic_pydantic import WebhookMessage
 from wa_whatsapp_web_wrapper import send_whatsapp_message, WhatsAppMessage
 from db import get_n_latest_messages_from_channel
+
 def route_message(message: WebhookMessage) -> None:
 
     # if I am in the message mention then:
