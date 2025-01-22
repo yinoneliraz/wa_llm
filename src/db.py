@@ -1,16 +1,18 @@
-import os
 import psycopg2
 from psycopg2.extras import DictCursor
 from psycopg2.extensions import connection
 from datetime import datetime
 from typing import Any
+from config import Settings
+
+settings = Settings()
 
 DB_CONFIG = {
-    'dbname': os.getenv('DB_NAME', 'your_database'),
-    'user': os.getenv('DB_USER', 'your_username'), 
-    'password': os.getenv('DB_PASSWORD', ''),
-    'host': os.getenv('DB_HOST', ''),
-    'port': os.getenv('DB_PORT', '5432')
+    'dbname': settings.DB_NAME,
+    'user': settings.DB_USER, 
+    'password': settings.DB_PASSWORD,
+    'host': settings.DB_HOST,
+    'port': settings.DB_PORT,
 }
 
 

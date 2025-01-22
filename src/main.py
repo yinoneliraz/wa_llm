@@ -2,12 +2,12 @@ from fastapi import FastAPI, HTTPException, Response
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import Optional, Dict, Any
-import os
-from dotenv import load_dotenv
+from config import Settings
 from db import init_db, get_messages_from_db
 from webhook_logic import webhook_logic
 
-load_dotenv()
+# Load settings
+settings = Settings()
 
 # Initialize FastAPI app
 app = FastAPI(title="Webhook API")
@@ -77,13 +77,11 @@ async def get_messages() -> list:
 if __name__ == "__main__":
     import uvicorn
     
-    port = int(os.getenv("PORT", "5001"))
-    host = os.environ.get("HOST", "0.0.0.0")
-    print(f"Running on {host}:{port}")
+    print(f"Running on {settings.HOST}:{settings.PORT}")
     
     uvicorn.run(
         "main:app",
-        host=host,
-        port=port,
+        host=settings.HOST,
+        port=settings.PORT,
         reload=True
     )
