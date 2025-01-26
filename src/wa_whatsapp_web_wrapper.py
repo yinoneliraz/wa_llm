@@ -1,5 +1,6 @@
-from typing import Dict, Any
+import base64
 import requests
+from typing import Dict, Any
 from pydantic import BaseModel
 from config import Settings
 
@@ -23,9 +24,13 @@ settings = Settings()
 host = settings.WHATSAPP_HOST
 
 def return_whatsapp_basic_auth() -> Dict[str, str]:
-    return {
-        "Authorization": f"Basic {settings.WHATSAPP_BASIC_AUTH_USER}:{settings.WHATSAPP_BASIC_AUTH_PASSWORD}"
-        } if settings.WHATSAPP_BASIC_AUTH_USER and settings.WHATSAPP_BASIC_AUTH_PASSWORD else {}
+    if not settings.WHATSAPP_BASIC_AUTH_USER or settings.WHATSAPP_BASIC_AUTH_PASSWORD:
+        return {}
+    
+    credentials = f"{settings.WHATSAPP_BASIC_AUTH_USER}:{settings.WHATSAPP_BASIC_AUTH_PASSWORD}"
+    encoded_credentials = base64.b64encode(credentials.encode()).decode()
+    print(f"Basic {encoded_credentials}")
+    return {"Authorization": f"Basic {encoded_credentials}"}
 
 def send_whatsapp_message(message: WhatsAppMessage) -> Dict[str, Any]:
     """
