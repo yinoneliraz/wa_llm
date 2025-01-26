@@ -25,7 +25,7 @@ services:
   #     - DB_HOST=postgres
 
   whatsapp:
-    image: aldinokemal2104/go-whatsapp-web-multidevice
+    image: aldinokemal2104/go-whatsapp-web-multidevice:v4.22.1
     container_name: whatsapp
     ports:
       - "3000:3000"
