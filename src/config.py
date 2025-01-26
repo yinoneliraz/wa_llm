@@ -16,7 +16,9 @@ class Settings(BaseSettings):
     # WhatsApp settings
     MY_NUMBER: str
     WHATSAPP_HOST: str
-    
+    WHATSAPP_BASIC_AUTH_PASSWORD: str
+    WHATSAPP_BASIC_AUTH_USER: str
+
     ANTHROPIC_API_KEY: str
     
     # Optional settings

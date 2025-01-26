@@ -22,6 +22,11 @@ class WhatsAppDevicesResponse(BaseModel):
 settings = Settings()
 host = settings.WHATSAPP_HOST
 
+def return_whatsapp_basic_auth() -> Dict[str, str]:
+    return {
+        "Authorization": f"Basic {settings.WHATSAPP_BASIC_AUTH_USER}:{settings.WHATSAPP_BASIC_AUTH_PASSWORD}"
+        } if settings.WHATSAPP_BASIC_AUTH_USER and settings.WHATSAPP_BASIC_AUTH_PASSWORD else {}
+
 def send_whatsapp_message(message: WhatsAppMessage) -> Dict[str, Any]:
     """
     Send a WhatsApp message using the API.
@@ -40,6 +45,7 @@ def send_whatsapp_message(message: WhatsAppMessage) -> Dict[str, Any]:
         "Accept": "application/json, text/plain, */*",
         "Content-Type": "application/json",
     }
+    headers.update(return_whatsapp_basic_auth())
 
     try:
         response = requests.post(
@@ -69,7 +75,7 @@ def get_whatsapp_devices() -> WhatsAppDevicesResponse:
     headers = {
         "Accept": "application/json, text/plain, */*",
     }
-
+    headers.update(return_whatsapp_basic_auth())
     try:
         response = requests.get(
             f"{host}/app/devices",
