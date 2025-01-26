@@ -7,7 +7,6 @@ WORKDIR /app
 # Copy the project into the image
 COPY pyproject.toml .
 COPY uv.lock .
-COPY .env .
 
 RUN uv sync --frozen
 
