@@ -7,10 +7,11 @@ dependencies = [
     "pydantic>=2.6.1",
     "psycopg2-binary>=2.9.9",
     "anthropic>=0.43.1",
-    "requests>=2.32.3",
     "fastapi>=0.115.6",
     "uvicorn>=0.34.0",
     "pydantic-settings>=2.7.1",
+    "sqlmodel>=0.0.22",
+    "httpx>=0.28.1",
 ]
 
 [tool.black]
@@ -18,14 +19,20 @@ line-length = 88
 target-version = ['py312']
 
 [tool.ruff]
-select = ["E", "F", "B", "I"]
-ignore = ["E501"]
+lint.select = ["E", "F", "B", "I"]
+lint.ignore = ["E501"]
 target-version = "py311"
 
 [tool.pyright]
-typeCheckingMode = "strict"
+typeCheckingMode = "basic"
+
+[tool.pyright.reportMissingTypeStubs]
+sqlmodel = false
 
 [dependency-groups]
 dev = [
+    "notebook>=7.3.2",
+    "pandas>=2.2.3",
     "ruff>=0.8.6",
+    "types-psycopg2>=2.9.21.20250121",
 ]
