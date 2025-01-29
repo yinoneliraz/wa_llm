@@ -3,9 +3,9 @@ from claude_wrapper import prompt
 from webhook_logic_pydantic import WebhookMessage
 from wa_whatsapp_web_wrapper import send_whatsapp_message, WhatsAppMessage
 from db import get_n_latest_messages_from_channel
-from config import Settings
+from config import get_settings
 
-settings = Settings()
+settings = get_settings()
 
 def route_message(message: WebhookMessage) -> None:
     phone = extract_number_from_webhook_message(message)

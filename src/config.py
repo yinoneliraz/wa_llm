@@ -25,6 +25,12 @@ class Settings(BaseSettings):
     DEBUG: bool = False
     LOG_LEVEL: str = "INFO"
 
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
+    model_config = {
+        "env_file": ".env",
+        "env_file_encoding": "utf-8"
+    }
+
+def get_settings() -> Settings:
+    """Factory function to create Settings instance from environment variables."""
+    # We ignore the pylance error because we want to fail the process if a required field is not provided.
+    return Settings()  # type: ignore

@@ -2,7 +2,7 @@ import base64
 import requests
 from typing import Dict, Any
 from pydantic import BaseModel
-from config import Settings
+from config import get_settings
 
 
 
@@ -20,7 +20,7 @@ class WhatsAppDevicesResponse(BaseModel):
     message: str
     results: list[WhatsAppDevice]
  
-settings = Settings()
+settings = get_settings()
 host = settings.WHATSAPP_HOST
 
 def return_whatsapp_basic_auth() -> Dict[str, str]:

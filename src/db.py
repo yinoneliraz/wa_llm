@@ -2,10 +2,10 @@ import psycopg2
 from psycopg2.extras import DictCursor
 from psycopg2.extensions import connection
 from datetime import datetime
-from typing import Any
-from config import Settings
+from typing import Any, TypedDict
+from config import get_settings
 
-settings = Settings()
+settings = get_settings()
 
 DB_CONFIG = {
     'dbname': settings.DB_NAME,
@@ -32,7 +32,12 @@ def init_db() -> None:
             ''')
         conn.commit()
 
-def get_messages_from_db() -> list[dict]:
+class MessageDict(TypedDict):
+    id: int
+    payload: dict[str, Any]
+    timestamp: str
+
+def get_messages_from_db() -> list[MessageDict]:
     print(f"getting it")
 
     with get_db_connection() as conn:
@@ -62,7 +67,10 @@ def store_message(payload: dict[str, Any]) -> int:
                 'INSERT INTO webhook_messages (payload, timestamp) VALUES (%s, %s) RETURNING id',
                 (psycopg2.extras.Json(payload), datetime.utcnow())
             )
-            message_id = cur.fetchone()[0]
+            row = cur.fetchone()
+            if row is None:
+                raise ValueError("Failed to insert message")
+            message_id = row[0]
             conn.commit()
     print(f"message_id is {message_id}, payload is {payload}")
     return message_id

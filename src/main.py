@@ -1,16 +1,25 @@
-from fastapi import FastAPI, HTTPException, Response
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import Optional, Dict, Any
-from config import Settings
+from config import get_settings
 from db import init_db, get_messages_from_db
 from webhook_logic import webhook_logic
+import uvicorn
+from contextlib import asynccontextmanager
 
 # Load settings
-settings = Settings()
+settings = get_settings()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    init_db()
+    yield
+    # Shutdown
+    pass
 
 # Initialize FastAPI app
-app = FastAPI(title="Webhook API")
+app = FastAPI(title="Webhook API", lifespan=lifespan)
 
 # Pydantic models for request/response validation
 class WebhookResponse(BaseModel):
@@ -22,14 +31,6 @@ class ErrorResponse(BaseModel):
     error: str
     message: Optional[str] = None
     details: Optional[str] = None
-
-# Startup event
-@app.on_event("startup")
-async def startup_event():
-    try:
-        init_db()
-    except Exception as e:
-        print(f"Failed to initialize database: {e}")
 
 @app.get("/")
 async def hello_world() -> str:

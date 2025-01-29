@@ -1,6 +1,6 @@
 from anthropic import Anthropic
 from anthropic.types import Message
-from config import Settings
+from config import get_settings
 
 # TODO: make class latter..
 # def init_claude(api_key: str) -> Anthropic:
@@ -10,7 +10,7 @@ from config import Settings
 
 def prompt(message: str, system: str = "You are a helpful assistant") -> str:
 
-    settings = Settings()
+    settings = get_settings()
     client = Anthropic(api_key=settings.ANTHROPIC_API_KEY)
 
     # Call Claude
