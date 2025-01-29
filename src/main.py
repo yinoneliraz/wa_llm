@@ -4,7 +4,6 @@ from typing import Optional, Dict, Any
 from config import get_settings
 from db import init_db, get_messages_from_db
 from webhook_logic import webhook_logic
-import uvicorn
 from contextlib import asynccontextmanager
 
 # Load settings
