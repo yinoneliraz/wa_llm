@@ -1,47 +1,64 @@
 import base64
-import requests
-from typing import Dict, Any
+from typing import Dict, Generic, TypeVar
+
+import httpx
 from pydantic import BaseModel
-from config import get_settings
+
+from config import Settings
 
 
-
-class WhatsAppMessage(BaseModel):
+class MessageRequest(BaseModel):
     phone: str
     message: str
 
-class WhatsAppDevice(BaseModel):
+
+class MessageResponsePayload(BaseModel):
+    message_id: str
+    status: str
+
+
+class DeviceResponsePayload(BaseModel):
     name: str
     #  Will end with @s.whatsapp.net
     device: str
 
-class WhatsAppDevicesResponse(BaseModel):
+
+T = TypeVar("T")
+
+
+class WhatsappResponse(BaseModel, Generic[T]):
     code: str
     message: str
-    results: list[WhatsAppDevice]
- 
-settings = get_settings()
-host = settings.WHATSAPP_HOST
+    results: T
+
+
+settings = Settings()  # todo, fix this - shouldnt be global
+
 
 def return_whatsapp_basic_auth() -> Dict[str, str]:
-    if not ( settings.WHATSAPP_BASIC_AUTH_USER or settings.WHATSAPP_BASIC_AUTH_PASSWORD) :
+    if not (settings.whatsapp_basic_auth_user or settings.whatsapp_basic_auth_password):
         return {}
-    
-    credentials = f"{settings.WHATSAPP_BASIC_AUTH_USER}:{settings.WHATSAPP_BASIC_AUTH_PASSWORD}"
+
+    credentials = (
+        f"{settings.whatsapp_basic_auth_user}:{settings.whatsapp_basic_auth_password}"
+    )
     encoded_credentials = base64.b64encode(credentials.encode()).decode()
     return {"Authorization": f"Basic {encoded_credentials}"}
 
-def send_whatsapp_message(message: WhatsAppMessage) -> Dict[str, Any]:
+
+async def send_whatsapp_message(
+    message: MessageRequest,
+) -> WhatsappResponse[MessageResponsePayload]:
     """
     Send a WhatsApp message using the API.
-    
+
     Args:
         message: WhatsAppMessage object containing phone and message
         base_url: Base URL of the WhatsApp API service
-    
+
     Returns:
         Dict containing the API response
-    
+
     Raises:
         requests.RequestException: If the request fails
     """
@@ -51,28 +68,26 @@ def send_whatsapp_message(message: WhatsAppMessage) -> Dict[str, Any]:
     }
     headers.update(return_whatsapp_basic_auth())
 
-    print(f"message headers {headers}")
-    try:
-        response = requests.post(
-            f"{host}/send/message",
+    async with httpx.AsyncClient() as client:
+        response = await client.post(
+            f"{settings.whatsapp_host}/send/message",
             headers=headers,
             json=message.model_dump(),
-            timeout=10  # 10 seconds timeout
+            timeout=10,  # 10 seconds timeout
         )
         response.raise_for_status()
-        return response.json()
-                
-    except requests.RequestException as e:
-        print(f"Error sending WhatsApp message: {str(e)}")
-        raise
+        return WhatsappResponse[MessageResponsePayload].model_validate_json(
+            response.content
+        )
 
-def get_whatsapp_devices() -> WhatsAppDevicesResponse:
+
+async def get_whatsapp_devices() -> WhatsappResponse:
     """
     Get information about connected WhatsApp devices/sessions.
-    
+
     Returns:
         WhatsAppDevicesResponse containing the device information
-    
+
     Raises:
         requests.RequestException: If the request fails
         ValidationError: If the response doesn't match the expected schema
@@ -81,15 +96,13 @@ def get_whatsapp_devices() -> WhatsAppDevicesResponse:
         "Accept": "application/json, text/plain, */*",
     }
     headers.update(return_whatsapp_basic_auth())
-    try:
-        response = requests.get(
-            f"{host}/app/devices",
+    async with httpx.AsyncClient() as client:
+        response = await client.get(
+            f"{settings.whatsapp_host}/app/devices",
             headers=headers,
-            timeout=10  # 10 seconds timeout
+            timeout=10,  # 10 seconds timeout
         )
         response.raise_for_status()
-        return WhatsAppDevicesResponse.model_validate(response.json())
-                
-    except requests.RequestException as e:
-        print(f"Error getting WhatsApp devices: {str(e)}")
-        raise
+        return WhatsappResponse[list[DeviceResponsePayload]].model_validate_json(
+            response.content
+        )

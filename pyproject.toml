@@ -7,25 +7,63 @@ dependencies = [
     "pydantic>=2.6.1",
     "psycopg2-binary>=2.9.9",
     "anthropic>=0.43.1",
-    "requests>=2.32.3",
     "fastapi>=0.115.6",
     "uvicorn>=0.34.0",
     "pydantic-settings>=2.7.1",
+    "sqlmodel>=0.0.22",
+    "httpx>=0.28.1",
 ]
-
-[tool.black]
-line-length = 88
-target-version = ['py312']
-
-[tool.ruff]
-select = ["E", "F", "B", "I"]
-ignore = ["E501"]
-target-version = "py311"
-
-[tool.pyright]
-typeCheckingMode = "strict"
+[tool.pyright.reportMissingTypeStubs]
+sqlmodel = false
 
 [dependency-groups]
 dev = [
+    "notebook>=7.3.2",
+    "pandas>=2.2.3",
     "ruff>=0.8.6",
+    "types-psycopg2>=2.9.21.20250121",
 ]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+
+[tool.coverage.report]
+exclude_also = [
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod",
+    "pragma: no cover",
+    "import *",
+    "@dataclass",
+    "@dataclasses.dataclass",
+    "class .*\\(BaseModel\\):",
+    "class .*\\(Enum\\):",
+    "class .*\\(enum\\.Enum\\):",
+    "class .*\\(pydantic\\.BaseModel\\):",
+    # 1. Exclude an except clause of a specific form:
+    "except ValueError:\\n\\s*assume\\(False\\)",
+    # 2. Comments to turn coverage on and off:
+    "no cover: start(?s:.)*?no cover: stop",
+    # 3. A pragma comment that excludes an entire file:
+    "\\A(?s:.*# pragma: exclude file.*)\\Z",
+    "@pytest\\.fixture.*",
+    "@pytest\\.mark.*",
+]
+
+omit = [
+    "tests/*",
+    "/tmp/*",
+    "/private/*",
+    "*/temporary/*"
+]
+
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
+typeCheckingMode = "basic"
