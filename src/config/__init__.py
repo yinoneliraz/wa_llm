@@ -1,5 +1,7 @@
-from typing import Optional
+from os import environ
+from typing import Optional, Self
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -30,3 +32,10 @@ class Settings(BaseSettings):
         case_sensitive=False,
         extra="ignore",
     )
+    
+    @model_validator(mode='after')
+    def apply_env(self) -> Self:
+        if self.anthropic_api_key:
+            environ['ANTHROPIC_API_KEY'] = self.anthropic_api_key
+        
+        return self

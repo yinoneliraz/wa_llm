@@ -5,13 +5,14 @@ description = ""
 requires-python = ">=3.12"
 dependencies = [
     "pydantic>=2.6.1",
-    "psycopg2-binary>=2.9.9",
     "fastapi>=0.115.6",
     "uvicorn>=0.34.0",
     "pydantic-settings>=2.7.1",
     "sqlmodel>=0.0.22",
     "httpx>=0.28.1",
     "pydantic-ai>=0.0.21",
+    "asyncpg>=0.30.0",
+    "sqlalchemy[asyncio]>=2.0.37",
 ]
 [tool.pyright.reportMissingTypeStubs]
 sqlmodel = false

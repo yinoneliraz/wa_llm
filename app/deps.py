@@ -2,30 +2,15 @@ from typing import Annotated
 
 from fastapi import Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import Session
-from sqlmodel import Session
-from sqlmodel.ext.asyncio.session import AsyncSession
 
 from config import Settings
 from handler import MessageHandler
+from whatsapp import WhatsAppClient
 
 
 async def get_settings(request: Request) -> Settings:
     assert request.app.state.settings, "Settings not initialized"
     return request.app.state.settings
-
-
-def get_db_session(request: Request) -> Session:
-    assert request.app.state.db_engine, "Database engine not initialized"
-    with Session(request.app.state.db_engine) as session:
-        try:
-            yield session
-            session.commit()
-        except Exception:
-            session.rollback()
-            raise
-        finally:
-            session.close()
 
 
 async def get_db_async_session(request: Request) -> AsyncSession:
@@ -39,8 +24,13 @@ async def get_db_async_session(request: Request) -> AsyncSession:
             raise
 
 
+def get_whatsapp(request: Request) -> WhatsAppClient:
+    assert request.app.state.whatsapp, "WhatsApp client not initialized"
+    return request.app.state.whatsapp
+
+
 async def get_handler(
-    settings: Annotated[Settings, Depends(get_settings)],
     session: Annotated[AsyncSession, Depends(get_db_async_session)],
+    whatsapp: Annotated[WhatsAppClient, Depends(get_whatsapp)],
 ) -> MessageHandler:
-    return MessageHandler(settings, session)
+    return MessageHandler(session, whatsapp)

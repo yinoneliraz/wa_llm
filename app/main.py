@@ -1,13 +1,18 @@
+import asyncio
 from contextlib import asynccontextmanager
 from typing import Annotated
+from warnings import warn
 
 from fastapi import Depends, FastAPI
-from sqlmodel import SQLModel, create_engine
+from sqlmodel import SQLModel
+from sqlalchemy.ext.asyncio import create_async_engine
 
 import models  # noqa
 from config import Settings
 from deps import get_handler
 from handler import MessageHandler
+from whatsapp import WhatsAppClient
+from whatsapp.init_groups import gather_groups
 
 settings = Settings()  # pyright: ignore [reportCallIssue]
 
@@ -16,15 +21,26 @@ settings = Settings()  # pyright: ignore [reportCallIssue]
 async def lifespan(app: FastAPI):
     global settings
     app.state.settings = settings
+    app.state.whatsapp = WhatsAppClient(
+        settings.whatsapp_host,
+        settings.whatsapp_basic_auth_user,
+        settings.whatsapp_basic_auth_password,
+    )
 
-    engine = create_engine(settings.db_uri, pool_size=10, max_overflow=20)
-    SQLModel.metadata.create_all(engine)
+    if settings.db_uri.startswith("postgresql://"):
+        warn("use 'postgresql+asyncpg://' instead of 'postgresql://' in db_uri")
+    engine = create_async_engine(settings.db_uri, pool_size=10, max_overflow=20, future=True)
+    async with engine.begin() as conn:
+        await conn.run_sync(SQLModel.metadata.drop_all)
+        await conn.run_sync(SQLModel.metadata.create_all)
+    asyncio.create_task(gather_groups(engine, app.state.whatsapp))
+    
     app.state.db_engine = engine
 
     try:
         yield
     finally:
-        app.state.db_pool.closeall()
+        await engine.dispose()
 
 
 # Initialize FastAPI app

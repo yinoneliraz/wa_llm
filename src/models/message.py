@@ -1,10 +1,10 @@
-import datetime
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, List, Optional
 
 from pydantic import field_validator, model_validator
-from sqlmodel import Field, Relationship, SQLModel
+from sqlmodel import Field, Relationship, SQLModel, Column, DateTime
 
-from .jid import normalize_jid, parse_jid
+from .jid import normalize_jid, parse_jid, JID
 from .webhook import WhatsAppWebhookPayload
 
 if TYPE_CHECKING:
@@ -14,8 +14,9 @@ if TYPE_CHECKING:
 
 class BaseMessage(SQLModel):
     message_id: str = Field(primary_key=True, max_length=255)
-    timestamp: datetime.datetime = Field(
-        default_factory=lambda: datetime.datetime.now(datetime.UTC)
+    timestamp: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        sa_column=Column(DateTime(timezone=True), nullable=False)
     )
     text: Optional[str] = Field(default=None)
     chat_jid: str = Field(max_length=255)
@@ -26,16 +27,14 @@ class BaseMessage(SQLModel):
         nullable=True,
         default=None,
     )
-    reply_to_id: Optional[str] = Field(
-        default=None, nullable=True
-    )
+    reply_to_id: Optional[str] = Field(default=None, nullable=True)
 
     @model_validator(mode="before")
     @classmethod
     def validate_chat_jid(self, data) -> dict:
         if "chat_jid" not in data:
             return data
-        
+
         jid = parse_jid(data["chat_jid"])
 
         if jid.is_group():
@@ -48,6 +47,12 @@ class BaseMessage(SQLModel):
     @classmethod
     def normalize(cls, value: Optional[str]) -> str | None:
         return normalize_jid(value) if value else None
+
+    def has_mentioned(self, jid: str | JID) -> bool:
+        if isinstance(jid, str):
+            jid = parse_jid(jid)
+
+        return f"@{jid.user}" in self.text
 
 
 class Message(BaseMessage, table=True):
@@ -75,13 +80,16 @@ class Message(BaseMessage, table=True):
         assert sender_jid
         assert payload.message.id
 
-        return cls(**BaseMessage(
-            message_id=payload.message.id,
-            text=payload.message.text,
-            chat_jid=chat_jid,
-            sender_jid=sender_jid,
-            timestamp=payload.timestamp,
-            reply_to_id=payload.message.replied_id,
-        ).model_dump())
+        return cls(
+            **BaseMessage(
+                message_id=payload.message.id,
+                text=payload.message.text,
+                chat_jid=chat_jid,
+                sender_jid=sender_jid,
+                timestamp=payload.timestamp,
+                reply_to_id=payload.message.replied_id,
+            ).model_dump()
+        )
+
 
 Message.model_rebuild()

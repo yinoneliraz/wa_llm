@@ -5,8 +5,10 @@ from pydantic_ai import Agent
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import desc, select
 
-from models import Message, Sender
-from whatsapp_gw import MessageRequest, send_whatsapp_message
+from .upsert import upsert
+from models import Message, Sender, BaseMessage, BaseSender
+from models.jid import normalize_jid
+from whatsapp import WhatsAppClient, SendMessageRequest
 
 
 class RouteEnum(str, Enum):
@@ -20,16 +22,16 @@ class RouteModel(BaseModel):
 
 
 class Router:
-    def __init__(self, session: AsyncSession, my_number: str):
+    def __init__(self, session: AsyncSession, whatsapp: WhatsAppClient):
         self.session = session
-        self.my_number = my_number
+        self.whatsapp = whatsapp
 
-    async def handle(self, message: Message):
-        route = await self.route(message.text)
+    async def __call__(self, message: Message):
+        route = await self._route(message.text)
         match route:
             case RouteEnum.hey:
                 await self.send_message(
-                    MessageRequest(
+                    SendMessageRequest(
                         phone=message.chat_jid, message="its the voice of my mother"
                     ),
                 )
@@ -38,7 +40,7 @@ class Router:
             case RouteEnum.ignore:
                 pass
 
-    async def route(self, message: str) -> RouteEnum:
+    async def _route(self, message: str) -> RouteEnum:
         agent = Agent(
             model="anthropic:claude-3-5-sonnet-latest",
             system_prompt="Extract a routing decision from the input.",
@@ -64,26 +66,28 @@ class Router:
         )
 
         response = await agent.run(TypeAdapter(list[Message]).dump_json(messages))
-        await self.send_message(MessageRequest(phone=chat_jid, message=response.data))
+        await self.send_message(
+            SendMessageRequest(phone=chat_jid, message=response.data)
+        )
 
-    async def send_message(self, message: MessageRequest):
-        resp = await send_whatsapp_message(message)
-        with self.session.begin_nested():
-            new_message = Message(
+    async def send_message(self, message: SendMessageRequest):
+        resp = await self.whatsapp.send_message(message)
+        async with self.session.begin_nested():
+            my_number = await self.whatsapp.get_my_jid()
+            new_message = BaseMessage(
                 message_id=resp.results.message_id,
                 text=message.message,
-                sender_jid=self.my_number,
+                sender_jid=my_number,
                 chat_jid=message.phone,
             )
 
             # Ensure sender exists (should be our bot's sender record)
-            if (await self.session.get(Sender, self.my_number)) is None:
-                sender = Sender(
-                    jid=self.my_number,
-                    push_name="Bot",  # Or whatever name you want to give your bot
+            if (await self.session.get(Sender, normalize_jid(my_number))) is None:
+                sender = BaseSender(
+                    jid=my_number,
                 )
-                await self.upsert(sender)
+                await upsert(self.session, Sender(**sender.model_dump()))
                 await self.session.flush()
 
-            await self.upsert(new_message)
+            await upsert(self.session, Message(**new_message.model_dump()))
             await self.session.flush()

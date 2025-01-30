@@ -15,7 +15,7 @@ class BaseGroup(SQLModel):
         primary_key=True, max_length=255
     )
     group_name: Optional[str] = Field(default=None, max_length=255)
-    group_topic: Optional[str] = Field(default=None, max_length=255)
+    group_topic: Optional[str] = Field(default=None)
     owner_jid: Annotated[Optional[str], BeforeValidator(normalize_jid)] = Field(
         max_length=255, foreign_key="sender.jid", nullable=True
     )
