@@ -1,18 +1,28 @@
 import json
 
-from anthropic import AsyncAnthropic
 from sqlmodel import Session, desc, select
+from pydantic import BaseModel
 
+from pydantic_ai import Agent
 from config import Settings
 from models import Message
 from whatsapp_gw import MessageRequest, send_whatsapp_message
+
+from enum import Enum
+
+class RouteEnum(str, Enum):
+    hey = 'HEY'
+    summarize = 'SUMMARIZE'
+    ignore = 'IGNORE'
+
+class RouteModel(BaseModel):
+    route: RouteEnum
 
 
 class MessageHandler:
     def __init__(self, settings: Settings, session: Session):
         self.settings = settings
         self.session = session
-        self.cli = AsyncAnthropic(api_key=settings.anthropic_api_key)
 
     async def __call__(self, message: Message):
         self.session.add(message)
@@ -20,14 +30,19 @@ class MessageHandler:
         # if I am in the message mention then:
         if message.text:
             if self.mentioned_me(message):
-                if "hey" in message.text:
-                    await self.send_message(
-                        MessageRequest(
-                            phone=message.chat_jid, message="its the voice of my mother"
-                        ),
-                    )
-                if "summarize" in message.text:
-                    await self.summarize(message.chat_jid)
+                
+                route = await self.route(message.text)
+                match route:
+                    case RouteEnum.hey:
+                        await self.send_message(
+                            MessageRequest(
+                                phone=message.chat_jid, message="its the voice of my mother"
+                            ),
+                        )
+                    case RouteEnum.summarize:
+                        await self.summarize(message.chat_jid)
+                    case RouteEnum.ignore:
+                        pass
 
     def mentioned_me(self, message: Message) -> bool:
         # TODO: migrate from using my number from from env variable to /devices endpoint.
@@ -60,15 +75,27 @@ class MessageHandler:
             )
         )
 
+
+
     async def prompt(
         self, message: str, system: str = "You are a helpful assistant"
     ) -> str:
-        response = await self.cli.messages.create(
-            model="claude-3-sonnet-20240229",
-            max_tokens=1000,
-            system=system,
-            messages=[{"role": "user", "content": message}],
+        
+        agent = Agent(
+            model='anthropic:claude-3-5-sonnet-latest',
+            system_prompt=system,
         )
 
-        assert response.content[0].type == "text"
-        return response.content[0].text
+        result = await agent.run(message)  
+        return result.data
+
+
+    async def route(self, message: str) -> RouteEnum:
+        agent = Agent(
+            model='anthropic:claude-3-5-sonnet-latest',
+            system_prompt='You need to determine the route based on the message',
+            result_type=RouteEnum,
+        )
+
+        result = await agent.run(message)  
+        return result.data
