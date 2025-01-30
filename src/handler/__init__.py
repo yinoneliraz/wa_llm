@@ -93,7 +93,7 @@ class MessageHandler:
     async def route(self, message: str) -> RouteEnum:
         agent = Agent(
             model='anthropic:claude-3-5-sonnet-latest',
-            system_prompt='You need to determine the route based on the message',
+            system_prompt='Extract a routing decision from the input.',
             result_type=RouteEnum,
         )
 
