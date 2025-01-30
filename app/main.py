@@ -31,11 +31,6 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Webhook API", lifespan=lifespan)
 
 
-@app.get("/")
-async def hello_world() -> str:
-    return "Hello, World!"
-
-
 @app.post("/webhook")
 async def webhook(
     payload: models.WhatsAppWebhookPayload,
@@ -46,11 +41,6 @@ async def webhook(
         await handler(message)
 
     return "ok"
-
-
-@app.get("/messages")
-async def get_messages() -> list:
-    return []
 
 
 if __name__ == "__main__":
