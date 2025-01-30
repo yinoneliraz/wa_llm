@@ -40,7 +40,7 @@ async def get_db_async_session(request: Request) -> AsyncSession:
 
 
 def get_handler(
-        settings: Annotated[Settings, Depends(get_settings)],
-        session: Annotated[Session, Depends(get_db_session)],
+    settings: Annotated[Settings, Depends(get_settings)],
+    session: Annotated[Session, Depends(get_db_session)],
 ) -> MessageHandler:
     return MessageHandler(settings, session)

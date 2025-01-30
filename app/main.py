@@ -37,8 +37,7 @@ async def webhook(
     handler: Annotated[MessageHandler, Depends(get_handler)],
 ) -> str:
     if payload.message and payload.from_:
-        message = models.Message.from_webhook(payload)
-        await handler(message)
+        await handler(payload)
 
     return "ok"
 

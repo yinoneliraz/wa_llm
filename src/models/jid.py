@@ -80,8 +80,12 @@ def parse_jid(jid: str) -> JID:
     parts = jid.split("@")
     if len(parts) == 1:
         return new_jid("", parts[0])
-    elif ":" in parts[0] and "." in parts[0] and parts[1] == DefaultUserServer:
-        return parse_ad_jid(parts[0])
+    elif ":" in parts[0]:
+        if parts[1] == DefaultUserServer:
+            if "." in parts[0]:
+                return parse_ad_jid(parts[0])
+            else:
+                parts = parts[0].split(":")[0]
     return new_jid(parts[0], parts[1])
 
 
