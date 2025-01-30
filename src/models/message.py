@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, List, Optional
 from pydantic import field_validator, model_validator
 from sqlmodel import Field, Relationship, SQLModel
 
-from src.jid import normalize_jid, parse_jid
+from .jid import normalize_jid, parse_jid
 
 from .webhook import WhatsAppWebhookPayload
 

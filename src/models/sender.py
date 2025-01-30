@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING, Annotated, List, Optional
 from pydantic import BeforeValidator
 from sqlmodel import Field, Relationship, SQLModel
 
-from src.jid import normalize_jid
+from .jid import normalize_jid
 
 if TYPE_CHECKING:
     from .group import Group

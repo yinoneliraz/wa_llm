@@ -4,7 +4,7 @@ from typing import Dict, Generic, TypeVar
 import httpx
 from pydantic import BaseModel
 
-from src.config import Settings
+from config import Settings
 
 
 class MessageRequest(BaseModel):
