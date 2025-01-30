@@ -5,7 +5,6 @@ from pydantic import field_validator, model_validator
 from sqlmodel import Field, Relationship, SQLModel
 
 from .jid import normalize_jid, parse_jid
-
 from .webhook import WhatsAppWebhookPayload
 
 if TYPE_CHECKING:
@@ -13,7 +12,7 @@ if TYPE_CHECKING:
     from .sender import Sender
 
 
-class Message(SQLModel, table=True):
+class BaseMessage(SQLModel):
     message_id: str = Field(primary_key=True, max_length=255)
     timestamp: datetime.datetime = Field(
         default_factory=lambda: datetime.datetime.now(datetime.UTC)
@@ -27,32 +26,40 @@ class Message(SQLModel, table=True):
         nullable=True,
         default=None,
     )
-    reply_to_id: Optional[str] = Field(default=None, foreign_key="message.message_id")
-
-    sender: Optional["Sender"] = Relationship(back_populates="messages")
-    group: Optional["Group"] = Relationship(back_populates="messages")
-
-    replies: List["Message"] = Relationship(
-        back_populates="replied_to",
-        sa_relationship_kwargs=dict(
-            remote_side="Message.message_id",  # notice the uppercase "M" to refer to this table class
-        ),
+    reply_to_id: Optional[str] = Field(
+        default=None, nullable=True
     )
-    replied_to: Optional["Message"] = Relationship(back_populates="replies")
 
     @model_validator(mode="before")
-    def validate_chat_jid(self):
-        jid = parse_jid(self.chat_jid)
+    @classmethod
+    def validate_chat_jid(self, data) -> dict:
+        if "chat_jid" not in data:
+            return data
+        
+        jid = parse_jid(data["chat_jid"])
 
         if jid.is_group():
-            self.group_jid = str(jid.to_non_ad())
+            data["group_jid"] = str(jid.to_non_ad())
 
-        self.chat_jid = str(jid.to_non_ad())
+        data["chat_jid"] = str(jid.to_non_ad())
+        return data
 
     @field_validator("group_jid", "sender_jid", mode="before")
     @classmethod
     def normalize(cls, value: Optional[str]) -> str | None:
         return normalize_jid(value) if value else None
+
+
+class Message(BaseMessage, table=True):
+    sender: Optional["Sender"] = Relationship(back_populates="messages")
+    group: Optional["Group"] = Relationship(back_populates="messages")
+    replies: List["Message"] = Relationship(
+        sa_relationship_kwargs={
+            "primaryjoin": "Message.message_id==foreign(Message.reply_to_id)",
+            "remote_side": "Message.message_id",  # Add this to clarify direction
+            "backref": "replied_to",
+        }
+    )
 
     @classmethod
     def from_webhook(cls, payload: WhatsAppWebhookPayload) -> "Message":
@@ -68,14 +75,13 @@ class Message(SQLModel, table=True):
         assert sender_jid
         assert payload.message.id
 
-        return cls(
+        return cls(**BaseMessage(
             message_id=payload.message.id,
             text=payload.message.text,
             chat_jid=chat_jid,
             sender_jid=sender_jid,
             timestamp=payload.timestamp,
             reply_to_id=payload.message.replied_id,
-        )
-
+        ).model_dump())
 
 Message.model_rebuild()
