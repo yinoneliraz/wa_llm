@@ -1975,15 +1975,6 @@ wheels = [
 ]
 
 [[package]]
-name = "types-psycopg2"
-version = "2.9.21.20250121"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/b8/77/128573421ed5ce885425f5c7a9f92eaa27e1196bfedebea2a2bc52ae6374/types_psycopg2-2.9.21.20250121.tar.gz", hash = "sha256:2b0e2cd0f3747af1ae25a7027898716d80209604770ef3cbf350fe055b9c349b", size = 26493 }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/c3/03/05ef800b3bb23ea4585a347df43fee3006ea4cf7857fc9bd70ade25dd936/types_psycopg2-2.9.21.20250121-py3-none-any.whl", hash = "sha256:b890dc6f5a08b6433f0ff73a4ec9a834deedad3e914f2a4a6fd43df021f745f1", size = 24946 },
-]
-
-[[package]]
 name = "types-python-dateutil"
 version = "2.9.0.20241206"
 source = { registry = "https://pypi.org/simple" }
@@ -2087,7 +2078,6 @@ dev = [
     { name = "notebook" },
     { name = "pandas" },
     { name = "ruff" },
-    { name = "types-psycopg2" },
 ]
 
 [package.metadata]
@@ -2108,7 +2098,6 @@ dev = [
     { name = "notebook", specifier = ">=7.3.2" },
     { name = "pandas", specifier = ">=2.2.3" },
     { name = "ruff", specifier = ">=0.8.6" },
-    { name = "types-psycopg2", specifier = ">=2.9.21.20250121" },
 ]
 
 [[package]]
