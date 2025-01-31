@@ -16,9 +16,10 @@ class BaseMessage(SQLModel):
     message_id: str = Field(primary_key=True, max_length=255)
     timestamp: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc),
-        sa_column=Column(DateTime(timezone=True), nullable=False)
+        sa_column=Column(DateTime(timezone=True), nullable=False),
     )
     text: Optional[str] = Field(default=None)
+    media_url: Optional[str] = Field(default=None)
     chat_jid: str = Field(max_length=255)
     sender_jid: str = Field(max_length=255, foreign_key="sender.jid")
     group_jid: Optional[str] = Field(
@@ -68,28 +69,67 @@ class Message(BaseMessage, table=True):
 
     @classmethod
     def from_webhook(cls, payload: WhatsAppWebhookPayload) -> "Message":
-        assert payload.message
+        """Create Message instance from WhatsApp webhook payload."""
+        assert payload.message, "Missing message"
+        assert payload.message.id, "Missing message ID"
+        assert payload.from_, "Missing sender"
 
-        chat_jid = sender_jid = payload.from_
-        assert chat_jid
-
-        if " in " in chat_jid:
-            sender_jid, chat_jid = chat_jid.split(" in ")
-
-        assert chat_jid
-        assert sender_jid
-        assert payload.message.id
+        # Parse sender and chat JIDs
+        if " in " in payload.from_:
+            sender_jid, chat_jid = payload.from_.split(" in ")
+        else:
+            sender_jid = chat_jid = payload.from_
 
         return cls(
-            **BaseMessage(
-                message_id=payload.message.id,
-                text=payload.message.text,
-                chat_jid=chat_jid,
-                sender_jid=sender_jid,
-                timestamp=payload.timestamp,
-                reply_to_id=payload.message.replied_id,
-            ).model_dump()
+            message_id=payload.message.id,
+            text=cls._extract_message_text(payload),
+            chat_jid=chat_jid,
+            sender_jid=sender_jid,
+            timestamp=payload.timestamp,
+            reply_to_id=payload.message.replied_id,
+            media_url=cls._extract_media_url(payload),
         )
+
+    @staticmethod
+    def _extract_media_url(payload: WhatsAppWebhookPayload) -> Optional[str]:
+        """Get media URL from first available media attachment."""
+        media_types = ["image", "video", "audio", "document", "sticker"]
+
+        for media_type in media_types:
+            if media := getattr(payload, media_type, None):
+                if media.media_path:
+                    return media.media_path
+
+        return None
+
+    @staticmethod
+    def _extract_message_text(payload: WhatsAppWebhookPayload) -> Optional[str]:
+        """Extract message text based on content type."""
+        # Return direct message text if available
+        if payload.message.text:
+            return payload.message.text
+
+        # Map content types to their caption attributes
+        content_types = {
+            "image": "caption",
+            "video": "caption",
+            "audio": "caption",
+            "document": "caption",
+            "sticker": "caption",
+            "contact": "display_name",
+            "location": "name",
+            "poll": "question",
+            "list": "title",
+            "order": "message",
+        }
+
+        # Check each content type for available caption
+        for content_type, caption_attr in content_types.items():
+            if content := getattr(payload, content_type, None):
+                if caption := getattr(content, caption_attr, None):
+                    return f"[[Attached {content_type.title()}]] {caption}"
+
+        return None
 
 
 Message.model_rebuild()
