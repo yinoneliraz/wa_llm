@@ -48,7 +48,7 @@ jobs:
         WHATSAPP_HOST: "http://localhost:3000"
         ANTHROPIC_API_KEY: "test_key"
       run: |
-        python -m pytest tests/ -v --cov=src --cov-report=xml
+        uv run python -m pytest tests/ -v --cov=src --cov-report=xml
         
     - name: Upload coverage reports to Codecov
       uses: codecov/codecov-action@v4
