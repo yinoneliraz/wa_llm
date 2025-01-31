@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from typing import Any
 from unittest.mock import AsyncMock, Mock
 
 import pytest
@@ -8,7 +9,6 @@ from pydantic_ai.result import RunResult
 from handler.router import Router, RouteEnum
 from models import Message
 from whatsapp import SendMessageRequest
-from .mock_session import mock_session
 
 
 @pytest.fixture
@@ -30,11 +30,16 @@ def test_message():
     )
 
 
+def MockAgent(return_value: Any):
+    mock = Mock()
+    mock.run = AsyncMock(return_value=RunResult([], 0, return_value, None, None))
+    return mock
+
+
 @pytest.mark.asyncio
 async def test_router_hey_route(mock_session, mock_whatsapp, test_message, monkeypatch):
     # Mock the Agent class
-    mock_agent = Mock()
-    mock_agent.run = AsyncMock(return_value=RunResult([], 0, RouteEnum.hey, None, None))
+    mock_agent = MockAgent(RouteEnum.hey)
 
     monkeypatch.setattr(Agent, "__init__", lambda *args, **kwargs: None)
     monkeypatch.setattr(Agent, "run", mock_agent.run)
@@ -58,14 +63,14 @@ async def test_router_hey_route(mock_session, mock_whatsapp, test_message, monke
 
 
 @pytest.mark.asyncio
-async def test_router_summarize_route(mock_session, mock_whatsapp, test_message, monkeypatch):
+async def test_router_summarize_route(
+    mock_session, mock_whatsapp, test_message, monkeypatch
+):
     # Mock the Agent class for routing
-    mock_route_agent = Mock()
-    mock_route_agent.run = AsyncMock(return_value=RunResult([], 0, RouteEnum.summarize, None, None))
+    mock_route_agent = MockAgent(RouteEnum.summarize)
 
     # Mock the Agent class for summarization
-    mock_summarize_agent = Mock()
-    mock_summarize_agent.run = AsyncMock(return_value="Summary of messages")
+    mock_summarize_agent = MockAgent("Summary of messages")
 
     # Setup agent mocks
     agents = {"route": mock_route_agent, "summarize": mock_summarize_agent}
@@ -108,10 +113,11 @@ async def test_router_summarize_route(mock_session, mock_whatsapp, test_message,
 
 
 @pytest.mark.asyncio
-async def test_router_ignore_route(mock_session, mock_whatsapp, test_message, monkeypatch):
+async def test_router_ignore_route(
+    mock_session, mock_whatsapp, test_message, monkeypatch
+):
     # Mock the Agent class
-    mock_agent = Mock()
-    mock_agent.run = AsyncMock(return_value=RouteEnum.ignore)
+    mock_agent = MockAgent(RouteEnum.ignore)
     monkeypatch.setattr(Agent, "__init__", lambda *args, **kwargs: None)
     monkeypatch.setattr(Agent, "run", mock_agent.run)
 
@@ -135,13 +141,8 @@ async def test_send_message(mock_session, mock_whatsapp):
     router = Router(mock_session, mock_whatsapp)
 
     # Test sending a message
-    await router.send_message(
-        SendMessageRequest(
-            phone="user@s.whatsapp.net",
-            message="Test message",
-        )
-    )
+    await router.send_message("user@s.whatsapp.net", "Test message")
 
     # Verify the message was sent and stored
     mock_whatsapp.send_message.assert_called_once()
-    mock_session.flush.assert_called() 
+    mock_session.flush.assert_called()
