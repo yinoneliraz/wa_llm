@@ -233,6 +233,14 @@ class LocationMessage(BaseModel):
     context_info: Optional[ContextInfo] = Field(None, alias="contextInfo")
 
 
+class ContactMessage(BaseModel):
+    """WhatsApp contact message structure"""
+
+    display_name: Optional[str] = Field(None, alias="displayName")
+    vcard: Optional[str] = None
+    context_info: Optional[ContextInfo] = Field(None, alias="contextInfo")
+
+
 class WhatsAppWebhookPayload(BaseModel):
     """
     Pydantic model representing the WhatsApp webhook payload structure.
@@ -271,7 +279,9 @@ class WhatsAppWebhookPayload(BaseModel):
     )
 
     # Special message types
-    contact: Optional[Any] = Field(None, description="Contact message content")
+    contact: Optional[ContactMessage] = Field(
+        None, description="Contact message content"
+    )
     list: Optional[ListMessage] = Field(None, description="List message content")
     location: Optional[LocationMessage] = Field(
         None, description="Location message content"

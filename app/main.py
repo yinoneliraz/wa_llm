@@ -29,12 +29,14 @@ async def lifespan(app: FastAPI):
 
     if settings.db_uri.startswith("postgresql://"):
         warn("use 'postgresql+asyncpg://' instead of 'postgresql://' in db_uri")
-    engine = create_async_engine(settings.db_uri, pool_size=10, max_overflow=20, future=True)
+    engine = create_async_engine(
+        settings.db_uri, pool_size=10, max_overflow=20, future=True
+    )
     async with engine.begin() as conn:
         await conn.run_sync(SQLModel.metadata.drop_all)
         await conn.run_sync(SQLModel.metadata.create_all)
     asyncio.create_task(gather_groups(engine, app.state.whatsapp))
-    
+
     app.state.db_engine = engine
 
     try:
