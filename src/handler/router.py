@@ -6,7 +6,7 @@ from sqlmodel import desc, select
 
 from models import Message
 from whatsapp import SendMessageRequest
-from . import BaseHandler
+from .base_handler import BaseHandler
 
 
 class RouteEnum(str, Enum):
