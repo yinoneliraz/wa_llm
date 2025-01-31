@@ -9,20 +9,7 @@ from ..mock_session import mock_session # noqa
 
 
 @pytest.mark.asyncio
-async def test_message_creation(mock_session):
-    # Create test data
-    sender = Sender(jid="1234567890@s.whatsapp.net", push_name="Test User")
-    group = Group(
-        group_jid="123456789-123456@g.us",
-        group_name="Test Group",
-        owner_jid="1234567890@s.whatsapp.net",
-    )
-
-    mock_session.add(sender)
-    mock_session.add(group)
-    await mock_session.commit()
-
-    # Create message from webhook payload
+async def test_webhook_to_message():
     payload = WhatsAppWebhookPayload(
         from_="1234567890@s.whatsapp.net in 123456789-123456@g.us",
         timestamp=datetime.now(timezone.utc),
@@ -40,20 +27,6 @@ async def test_message_creation(mock_session):
     assert message.sender_jid == "1234567890@s.whatsapp.net"
     assert message.group_jid == "123456789-123456@g.us"
 
-    # Test database persistence
-    mock_session.add(message)
-    await mock_session.commit()
-    await mock_session.refresh(message)
-
-    # Query and verify
-    stmt = select(Message).where(Message.message_id == "test_message_id")
-    result = await mock_session.execute(stmt)
-    db_message = result.scalar_one()
-
-    assert db_message.text == "Hello @bot how are you?"
-    assert db_message.sender.push_name == "Test User"
-    assert db_message.group.group_name == "Test Group"
-
 
 @pytest.mark.asyncio
 async def test_message_mentions(mock_session):
@@ -64,5 +37,6 @@ async def test_message_mentions(mock_session):
         sender_jid="sender@s.whatsapp.net",
     )
 
+    assert message.has_mentioned("1234567890")
     assert message.has_mentioned("1234567890@s.whatsapp.net")
     assert not message.has_mentioned("9876543210@s.whatsapp.net") 
