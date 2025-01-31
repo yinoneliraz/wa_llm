@@ -3,19 +3,12 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 from pydantic_ai import Agent
+from pydantic_ai.result import RunResult
 
 from handler.router import Router, RouteEnum
 from models import Message
 from whatsapp import SendMessageRequest
-
-
-@pytest.fixture
-def mock_session():
-    session = AsyncMock()
-    session.begin_nested = AsyncMock()
-    session.begin_nested.return_value.__aenter__ = AsyncMock()
-    session.begin_nested.return_value.__aexit__ = AsyncMock()
-    return session
+from .mock_session import mock_session
 
 
 @pytest.fixture
@@ -41,7 +34,8 @@ def test_message():
 async def test_router_hey_route(mock_session, mock_whatsapp, test_message, monkeypatch):
     # Mock the Agent class
     mock_agent = Mock()
-    mock_agent.run = AsyncMock(return_value=RouteEnum.hey)
+    mock_agent.run = AsyncMock(return_value=RunResult([], 0, RouteEnum.hey, None, None))
+
     monkeypatch.setattr(Agent, "__init__", lambda *args, **kwargs: None)
     monkeypatch.setattr(Agent, "run", mock_agent.run)
 
@@ -67,7 +61,7 @@ async def test_router_hey_route(mock_session, mock_whatsapp, test_message, monke
 async def test_router_summarize_route(mock_session, mock_whatsapp, test_message, monkeypatch):
     # Mock the Agent class for routing
     mock_route_agent = Mock()
-    mock_route_agent.run = AsyncMock(return_value=RouteEnum.summarize)
+    mock_route_agent.run = AsyncMock(return_value=RunResult([], 0, RouteEnum.summarize, None, None))
 
     # Mock the Agent class for summarization
     mock_summarize_agent = Mock()
