@@ -4,7 +4,6 @@ from models.jid import (
     JID,
     JIDParseError,
     new_ad_jid,
-    new_jid,
     normalize_jid,
     parse_jid,
 )
@@ -64,4 +63,4 @@ def test_invalid_jid():
         parse_jid("1234567890.abc:1@s.whatsapp.net")
 
     with pytest.raises(JIDParseError):
-        parse_jid("1234567890.1:abc@s.whatsapp.net") 
+        parse_jid("1234567890.1:abc@s.whatsapp.net")

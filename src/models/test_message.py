@@ -1,11 +1,10 @@
 from datetime import datetime, timezone
 
 import pytest
-from sqlmodel import select
 
-from models import Message, Sender, Group
+from models import Message
 from models.webhook import WhatsAppWebhookPayload
-from ..mock_session import mock_session # noqa
+from test_utils.mock_session import mock_session  # noqa
 
 
 @pytest.mark.asyncio
@@ -39,4 +38,4 @@ async def test_message_mentions(mock_session):
 
     assert message.has_mentioned("1234567890")
     assert message.has_mentioned("1234567890@s.whatsapp.net")
-    assert not message.has_mentioned("9876543210@s.whatsapp.net") 
+    assert not message.has_mentioned("9876543210@s.whatsapp.net")
