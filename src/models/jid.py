@@ -87,7 +87,7 @@ def parse_jid(jid: str) -> JID:
             if "." in parts[0]:
                 return parse_ad_jid(parts[0])
             else:
-                parts = parts[0].split(":")[0]
+                parts[0] = parts[0].split(":")[0]
     return new_jid(parts[0], parts[1])
 
 
