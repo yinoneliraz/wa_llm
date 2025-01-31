@@ -5,7 +5,6 @@ from pydantic_ai import Agent
 from sqlmodel import desc, select
 
 from models import Message
-from whatsapp import SendMessageRequest
 from .base_handler import BaseHandler
 
 
@@ -24,7 +23,11 @@ class Router(BaseHandler):
         route = await self._route(message.text)
         match route:
             case RouteEnum.hey:
-                await self.send_message(message.chat_jid, "its the voice of my mother"),
+                (
+                    await self.send_message(
+                        message.chat_jid, "its the voice of my mother"
+                    ),
+                )
             case RouteEnum.summarize:
                 await self.summarize(message.chat_jid)
             case RouteEnum.ignore:
@@ -47,7 +50,8 @@ class Router(BaseHandler):
             .order_by(desc(Message.timestamp))
             .limit(5)
         )
-        messages: list[Message] = self.session.exec(stmt).all()
+        res = await self.session.exec(stmt)
+        messages: list[Message] = res.all()
 
         agent = Agent(
             model="anthropic:claude-3-5-sonnet-latest",
@@ -55,5 +59,7 @@ class Router(BaseHandler):
             result_type=str,
         )
 
-        response = await agent.run(TypeAdapter(list[Message]).dump_json(messages).decode())
+        response = await agent.run(
+            TypeAdapter(list[Message]).dump_json(messages).decode()
+        )
         await self.send_message(chat_jid, response.data)
