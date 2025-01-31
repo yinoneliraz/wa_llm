@@ -11,18 +11,19 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
-  # web-server:
-  #   build: .
-  #   volumes:
-  #     - ./src:/app/src
-  #     - ./.env:/app/.env
-  #   ports:
-  #     - "8000:8000"
-  #   depends_on:
-  #     - postgres
-  #     - whatsapp
-  #   environment:
-  #     - DB_HOST=postgres
+#  web-server:
+#     build: .
+#     volumes:
+#       - ./src:/app/src
+#       - ./.env:/app/.env
+#     ports:
+#       - "8000:8000"
+#     depends_on:
+#       - postgres
+#       - whatsapp
+#     environment:
+#       - DB_URI=postgresql+asyncpg://user:password@postgres:5432/webhook_db
+#       - WHATSAPP_HOST=http://whatsapp:3000
 
   whatsapp:
     image: aldinokemal2104/go-whatsapp-web-multidevice:v4.22.1

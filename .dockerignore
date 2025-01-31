@@ -15,3 +15,5 @@ build/
 *.egg-info/
 .eggs/
 *.log
+.git
+.github
