@@ -80,7 +80,7 @@ class Message(BaseMessage, table=True):
         else:
             sender_jid = chat_jid = payload.from_
 
-        return cls(
+        return cls(**BaseMessage(
             message_id=payload.message.id,
             text=cls._extract_message_text(payload),
             chat_jid=chat_jid,
@@ -88,7 +88,7 @@ class Message(BaseMessage, table=True):
             timestamp=payload.timestamp,
             reply_to_id=payload.message.replied_id,
             media_url=cls._extract_media_url(payload),
-        )
+        ).model_dump())
 
     @staticmethod
     def _extract_media_url(payload: WhatsAppWebhookPayload) -> Optional[str]:
