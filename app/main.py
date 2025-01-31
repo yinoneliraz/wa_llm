@@ -30,7 +30,13 @@ async def lifespan(app: FastAPI):
     if settings.db_uri.startswith("postgresql://"):
         warn("use 'postgresql+asyncpg://' instead of 'postgresql://' in db_uri")
     engine = create_async_engine(
-        settings.db_uri, pool_size=10, max_overflow=20, future=True
+        settings.db_uri,
+        pool_size=20,
+        max_overflow=40,
+        pool_timeout=30,
+        pool_pre_ping=True,
+        pool_recycle=600,
+        future=True,
     )
     async with engine.begin() as conn:
         await conn.run_sync(SQLModel.metadata.create_all)

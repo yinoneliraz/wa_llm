@@ -38,7 +38,8 @@ class BaseHandler:
 
         async with self.session.begin_nested():
             # Ensure sender exists and is committed
-            if (await self.session.get(Sender, message.sender_jid)) is None:
+            sender = await self.session.get(Sender, message.sender_jid)
+            if sender is None:
                 sender = Sender(
                     **BaseSender(
                         jid=message.sender_jid,  # Use normalized JID from message
@@ -51,7 +52,8 @@ class BaseHandler:
                 )  # Ensure sender is visible in this transaction
 
             if message.group_jid:
-                if (await self.session.get(Group, message.group_jid)) is None:
+                group = await self.session.get(Group, message.group_jid)
+                if group is None:
                     group = Group(**BaseGroup(group_jid=message.group_jid).model_dump())
                     await self.upsert(group)
                     await self.session.flush()
