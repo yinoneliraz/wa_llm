@@ -24,11 +24,7 @@ class Router(BaseHandler):
         route = await self._route(message.text)
         match route:
             case RouteEnum.hey:
-                await self.send_message(
-                    SendMessageRequest(
-                        phone=message.chat_jid, message="its the voice of my mother"
-                    ),
-                )
+                await self.send_message(message.chat_jid, "its the voice of my mother"),
             case RouteEnum.summarize:
                 await self.summarize(message.chat_jid)
             case RouteEnum.ignore:
