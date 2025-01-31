@@ -16,7 +16,7 @@ class BaseSender(SQLModel):
 
     @field_validator("jid", mode="before")
     @classmethod
-    def normalize(cls, value: Optional[str]) -> str:
+    def normalize(cls, value: str) -> str:
         return normalize_jid(value)
 
 

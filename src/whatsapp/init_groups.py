@@ -11,7 +11,7 @@ async def gather_groups(db_engine: AsyncEngine, client: WhatsAppClient):
     async with AsyncSession(db_engine) as session:
         try:
             for g in groups.results.data:
-                if (await session.get(Sender, g.OwnerJID)) is None:
+                if (await session.get(Sender, g.OwnerJID)) is None and g.OwnerJID:
                     owner = Sender(
                         **BaseSender(
                             jid=g.OwnerJID,

@@ -21,4 +21,4 @@ async def upsert(session: AsyncSession, entity: SQLModel):
         },
     )
 
-    return await session.execute(stmt)
+    return await session.exec(stmt)
