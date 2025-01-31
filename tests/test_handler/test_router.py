@@ -10,6 +10,7 @@ from handler.router import Router, RouteEnum
 from models import Message
 from whatsapp import SendMessageRequest
 
+from ..mock_session import mock_session # noqa
 
 @pytest.fixture
 def mock_whatsapp():
