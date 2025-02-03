@@ -26,11 +26,13 @@ services:
 #       - WHATSAPP_HOST=http://whatsapp:3000
 
   whatsapp:
-    image: aldinokemal2104/go-whatsapp-web-multidevice:v4.22.1
+    image: aldinokemal2104/go-whatsapp-web-multidevice:v5.0.0
     container_name: whatsapp
     ports:
       - "3000:3000"
     restart: always
+    depends_on:
+      - postgres
     volumes:
       - whatsapp:/app/storages
     # --webhook="https://webhook.site/185fe13d-1fe1-40e7-ad5f-21899da596ef"
@@ -38,6 +40,7 @@ services:
     command: >
       --webhook="http://host.docker.internal:8000/webhook"
       --basic-auth=kemal:secret,toni:password,userName:secretPassword
+      --db-uri=postgres://user:password@postgres:5432/whatsapp?sslmode=disable
 
 volumes:
   whatsapp:
