@@ -59,7 +59,7 @@ async def test_router_hey_route(mock_session, mock_whatsapp, test_message, monke
     mock_whatsapp.send_message.assert_called_once_with(
         SendMessageRequest(
             phone="user@s.whatsapp.net",
-            message="its the voice of my mother",
+            message="Who is calling my name?",
         )
     )
 
