@@ -1,46 +1,29 @@
-
 services:
   postgres:
-    image: postgres:16
-    environment:
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: webhook_db
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-
-#  web-server:
-#     build: .
-#     volumes:
-#       - ./src:/app/src
-#       - ./.env:/app/.env
-#     ports:
-#       - "8000:8000"
-#     depends_on:
-#       - postgres
-#       - whatsapp
-#     environment:
-#       - DB_URI=postgresql+asyncpg://user:password@postgres:5432/webhook_db
-#       - WHATSAPP_HOST=http://whatsapp:3000
+    extends:
+      file: docker-compose.base.yml
+      service: postgres
 
   whatsapp:
-    image: aldinokemal2104/go-whatsapp-web-multidevice:v5.0.0
-    container_name: whatsapp
+    extends:
+      file: docker-compose.base.yml
+      service: whatsapp
+    environment:
+      - WHATSAPP_WEBHOOK=http://web-server:8000/webhook
+
+  web-server:
+    build: .
+    volumes:
+      - ./src:/app/src
+      - ./.env:/app/.env
     ports:
-      - "3000:3000"
-    restart: always
+      - "8000:8000"
     depends_on:
       - postgres
-    volumes:
-      - whatsapp:/app/storages
-    # --webhook="https://webhook.site/185fe13d-1fe1-40e7-ad5f-21899da596ef"
-    #--webhook="http://web-server:8000/webhook"
-    command: >
-      --webhook="http://host.docker.internal:8000/webhook"
-      --basic-auth=kemal:secret,toni:password,userName:secretPassword
-      --db-uri=postgres://user:password@postgres:5432/whatsapp?sslmode=disable
+      - whatsapp
+    environment:
+      - DB_URI=postgresql+asyncpg://user:password@postgres:5432/webhook_db
+      - WHATSAPP_HOST=http://whatsapp:3000
 
 volumes:
   whatsapp:

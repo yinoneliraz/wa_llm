@@ -1,0 +1,18 @@
+services:
+  postgres:
+    extends:
+      file: docker-compose.base.yml
+      service: postgres
+
+  whatsapp:
+    extends:
+      file: docker-compose.base.yml
+      service: whatsapp
+    environment:
+      - WHATSAPP_WEBHOOK=http://host.docker.internal:8000/webhook
+
+volumes:
+  whatsapp:
+    name: whatsapp
+  postgres_data:
+    name: postgres_data
