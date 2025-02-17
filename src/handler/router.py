@@ -11,6 +11,8 @@ from voyageai.client_async import AsyncClient
 from models import Message, KBTopic
 from .base_handler import BaseHandler
 
+# Creating an object
+logger = logging.getLogger()
 
 class RouteEnum(str, Enum):
     summarize = "SUMMARIZE"
@@ -25,14 +27,16 @@ class RouteModel(BaseModel):
 class Router(BaseHandler):
     async def __call__(self, message: Message):
         route = await self._route(message.text)
-        logging.info(f"Route: {route}")
-        match route:
-            case RouteEnum.summarize:
-                await self.summarize(message.chat_jid)
-            case RouteEnum.ask_question:
-                await self.ask_question(message.text)
-            case RouteEnum.other:
-                logging.warning(f"OTHER route was chosen Lets see why: {message.text}, {message.chat_jid}")
+        logger.warning(f"Route: {route}")
+        await self.ask_question(message.text)
+        
+        # match route:
+        #     case RouteEnum.summarize:
+        #         await self.summarize(message.chat_jid)
+        #     case RouteEnum.ask_question:
+        #         await self.ask_question(message.text)
+        #     case RouteEnum.other:
+        #         logging.warning(f"OTHER route was chosen Lets see why: {message.text}, {message.chat_jid}")
 
     async def _route(self, message: str) -> RouteEnum:
         agent = Agent(
@@ -122,7 +126,7 @@ class Router(BaseHandler):
         '''
         
         generation_response = await generation_agent.run(prompt_template)
-        logging.info(f"retreival: {similar_topics}, generation {generation_response.data}")
+        logger.info(f"retreival: {similar_topics}, generation {generation_response.data}")
         return generation_response.data
 
         
