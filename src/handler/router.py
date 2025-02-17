@@ -28,7 +28,7 @@ class Router(BaseHandler):
     async def __call__(self, message: Message):
         route = await self._route(message.text)
         logger.warning(f"Route: {route}")
-        await self.ask_question(message.text)
+        await self.ask_question(message.text, message.chat_jid)
         
         # match route:
         #     case RouteEnum.summarize:
@@ -86,7 +86,7 @@ class Router(BaseHandler):
             total_tokens += res.total_tokens
         return embeddings
     
-    async def ask_question(self, question: str):
+    async def ask_question(self, question: str, chat_jid: str):
         
         rephrased_agent = Agent(
             model="anthropic:claude-3-5-haiku-latest",
@@ -127,6 +127,6 @@ class Router(BaseHandler):
         
         generation_response = await generation_agent.run(prompt_template)
         logger.warning(f"retreival: {similar_topics}, generation {generation_response.data}")
-        return generation_response.data
+        await self.send_message(chat_jid, generation_response.data)
 
         
