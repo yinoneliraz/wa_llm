@@ -2,13 +2,12 @@ import logging
 from datetime import datetime, timedelta
 from enum import Enum
 
-from typing import List
-from pydantic import BaseModel, TypeAdapter
+from pydantic import BaseModel, TypeAdapter, Field
 from pydantic_ai import Agent
 from sqlmodel import desc, select
-from voyageai.client_async import AsyncClient
 
 from models import Message, KBTopic
+from utils.voyage_embed_text import voyage_embed_text
 from .base_handler import BaseHandler
 
 # Creating an object
@@ -71,22 +70,6 @@ class Router(BaseHandler):
         )
         await self.send_message(chat_jid, response.data)
 
-    async def _embed_text(self, embedding_client: AsyncClient, input: List[str]) -> List[List[float]]:
-        model_name = 'voyage-3'
-        batch_size = 128
-        embeddings = []
-        total_tokens = 0
-
-        for i in range(0, len(input), batch_size):
-            res = await embedding_client.embed(
-                input[i : i + batch_size],
-                model=model_name,
-                input_type="document"
-            )
-            embeddings += res.embeddings
-            total_tokens += res.total_tokens
-        return embeddings
-    
     async def ask_question(self, question: str, chat_jid: str):
         
         rephrased_agent = Agent(
@@ -97,7 +80,7 @@ class Router(BaseHandler):
         # We obviously need to translate the question and turn the question vebality to a title / summary text to make it closer to the questions in the rag
         rephrased_response = await rephrased_agent.run(question)
         # Get query embedding
-        embedded_question = (await self._embed_text(self.embedding_client, [rephrased_response.data]))[0]
+        embedded_question = (await voyage_embed_text(self.embedding_client, [rephrased_response.data]))[0]
         
         # query for user query
         retrieved_topics = await self.session.exec(
@@ -136,5 +119,3 @@ class Router(BaseHandler):
             f"Generated Response: {generation_response.data}"
         )
         await self.send_message(chat_jid, generation_response.data)
-
-        

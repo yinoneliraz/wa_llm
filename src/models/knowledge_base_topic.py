@@ -1,7 +1,8 @@
+from datetime import datetime, timezone
+
 from typing import List, Optional
-from sqlmodel import Field, SQLModel, Index, Relationship
+from sqlmodel import Field, SQLModel, Index, Column, DateTime
 from pgvector.sqlalchemy import Vector
-from .group import Group
 from datetime import datetime
 
 
@@ -11,15 +12,18 @@ class KBTopicBase(SQLModel):
         max_length=255,
         foreign_key="group.group_jid",
     )
-    start_time: datetime
+    start_time: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )
     # TODO: Turn into sender_jids: List[str]. Should we normalize jids into a JID object? I don't think so.
     speakers: str
     subject: str
     summary: str
 
-# class KBTIPICCreate(KBTopicBase):
-#     id: str
-#     embedding: List[float]
+class KBTopicCreate(KBTopicBase):
+    id: str
+    embedding: List[float]
 
 class KBTopic(KBTopicBase, table=True):
     id: str = Field(primary_key=True)
