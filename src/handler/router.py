@@ -126,7 +126,7 @@ class Router(BaseHandler):
         '''
         
         generation_response = await generation_agent.run(prompt_template)
-        logger.info(f"retreival: {similar_topics}, generation {generation_response.data}")
+        logger.warning(f"retreival: {similar_topics}, generation {generation_response.data}")
         return generation_response.data
 
         
