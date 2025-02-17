@@ -9,7 +9,6 @@ from voyageai.client_async import AsyncClient
 from .base_handler import BaseHandler
 
 
-
 class MessageHandler(BaseHandler):
     def __init__(self, session: AsyncSession, whatsapp: WhatsAppClient, embedding_client: AsyncClient):
         self.router = Router(session, whatsapp, embedding_client)

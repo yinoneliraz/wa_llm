@@ -104,5 +104,3 @@ class BaseHandler:
 
     async def upsert(self, model):
         return await upsert(self.session, model)
-
-
