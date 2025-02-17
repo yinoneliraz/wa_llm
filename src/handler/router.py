@@ -12,7 +12,7 @@ from models import Message, KBTopic
 from .base_handler import BaseHandler
 
 # Creating an object
-logger = logging.getLogger()
+logger = logging.getLogger(__name__)
 
 class RouteEnum(str, Enum):
     summarize = "SUMMARIZE"
@@ -47,6 +47,7 @@ class Router(BaseHandler):
 
         result = await agent.run(message)
         return result.data
+    
     async def summarize(self, chat_jid: str):
         time_24_hours_ago = datetime.utcnow() - timedelta(hours=24)
         stmt = (
@@ -126,7 +127,14 @@ class Router(BaseHandler):
         '''
         
         generation_response = await generation_agent.run(prompt_template)
-        logger.warning(f"retreival: {similar_topics}, generation {generation_response.data}, question: {question}, chat_jid: {chat_jid}")
+        logger.info(
+            "RAG Query Results:\n"
+            f"Question: {question}\n"
+            f"Chat JID: {chat_jid}\n"
+            f"Retrieved Topics: {len(similar_topics)}\n"
+            "Topics:\n" + "\n".join(f"- {topic[:100]}..." for topic in similar_topics) + "\n"
+            f"Generated Response: {generation_response.data}"
+        )
         await self.send_message(chat_jid, generation_response.data)
 
         
