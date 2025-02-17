@@ -103,7 +103,7 @@ class Router(BaseHandler):
         
         similar_topics = []
         for result in retrieved_topics:
-            similar_topics.append(result.content)
+            similar_topics.append(f"{result.subject} \n {result.summary}")
 
         generation_agent = Agent(
             model="anthropic:claude-3-5-sonnet-latest",
