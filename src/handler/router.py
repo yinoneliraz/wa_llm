@@ -25,6 +25,7 @@ class RouteModel(BaseModel):
 class Router(BaseHandler):
     async def __call__(self, message: Message):
         route = await self._route(message.text)
+        logging.info(f"Route: {route}")
         match route:
             case RouteEnum.summarize:
                 await self.summarize(message.chat_jid)
