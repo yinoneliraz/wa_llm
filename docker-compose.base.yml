@@ -1,7 +1,7 @@
 # docker-compose.base.yml
 services:
   postgres:
-    image: postgres:16
+    image: pgvector/pgvector:pg17
     environment:
       POSTGRES_USER: user
       POSTGRES_PASSWORD: password
