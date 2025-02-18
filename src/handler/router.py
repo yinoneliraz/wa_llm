@@ -101,6 +101,7 @@ class Router(BaseHandler):
             - Write a casual direct response to the query. no need to repeat the query.
             - Answer in the same language as the query.
             - Only answer from the topics attached, no other text.
+            - When answering, provide a complete answer to the message - telling the user everything they need to know. BUT not too much! remember - it's a chat.
             - Please do tag users while talking about them (e.g., @972536150150). ONLY answer with the new phrased query, no other text.""",
         )
 
