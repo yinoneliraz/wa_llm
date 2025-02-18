@@ -17,7 +17,8 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from .jid import normalize_jid
 
 if TYPE_CHECKING:
-    pass
+    from .message import Message
+    from .sender import Sender
 
 
 class BaseGroup(SQLModel):
