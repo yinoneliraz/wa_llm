@@ -19,16 +19,16 @@ async def gather_groups(db_engine: AsyncEngine, client: WhatsAppClient):
                     )
                     await upsert(session, owner)
 
-                g = await session.get(Group, g.JID)
+                og = await session.get(Group, g.JID)
 
                 group = Group(
                     **BaseGroup(
-                        group_jid=g.JID,
+                        group_jid=g.group_jid,
                         group_name=g.Name,
                         group_topic=g.Topic,
                         owner_jid=g.OwnerJID,
-                        managed=g.Managed if g else False,
-                        community_keys=g.CommunityKeys if g else None,
+                        managed=og.managed if og else False,
+                        community_keys=og.community_keys if og else None,
                     ).model_dump()
                 )
                 await upsert(session, group)
