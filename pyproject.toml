@@ -16,6 +16,7 @@ dependencies = [
     "pgvector>=0.3.6",
     "voyageai>=0.3.2",
     "tenacity>=9.0.0",
+    "alembic>=1.14.1",
 ]
 [tool.pyright.reportMissingTypeStubs]
 sqlmodel = false

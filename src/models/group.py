@@ -1,13 +1,23 @@
 from typing import TYPE_CHECKING, List, Optional
 
 from pydantic import field_validator
-from sqlmodel import Field, Relationship, SQLModel
+from sqlmodel import (
+    Field,
+    Relationship,
+    SQLModel,
+    Index,
+    ARRAY,
+    Column,
+    String,
+    select,
+    cast,
+)
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 from .jid import normalize_jid
 
 if TYPE_CHECKING:
-    from .message import Message
-    from .sender import Sender
+    pass
 
 
 class BaseGroup(SQLModel):
@@ -18,6 +28,9 @@ class BaseGroup(SQLModel):
         max_length=255, foreign_key="sender.jid", nullable=True
     )
     managed: bool = Field(default=False)
+    community_keys: Optional[List[str]] = Field(
+        default=None, sa_column=Column(ARRAY(String))
+    )
 
     @field_validator("group_jid", "owner_jid", mode="before")
     @classmethod
@@ -28,6 +41,36 @@ class BaseGroup(SQLModel):
 class Group(BaseGroup, table=True):
     owner: Optional["Sender"] = Relationship(back_populates="groups_owned")
     messages: List["Message"] = Relationship(back_populates="group")
+
+    __table_args__ = (
+        Index("idx_group_community_keys", "community_keys", postgresql_using="gin"),
+    )
+
+    async def get_related_community_groups(
+        self, session: AsyncSession
+    ) -> List["Group"]:
+        """
+        Fetches all other groups that share at least one community key with this group.
+
+        Args:
+            session: AsyncSession instance.
+
+        Returns:
+            List[Group]: List of groups sharing any community keys, excluding self.
+        """
+        if not self.community_keys:
+            return []
+
+        query = (
+            select(Group)
+            .where(Group.group_jid != self.group_jid)  # Exclude self
+            .where(
+                cast(Group.community_keys, ARRAY(String)).op("&&")(self.community_keys)
+            )
+        )
+
+        result = await session.exec(query)  # Correct async execution
+        return result.all()
 
 
 Group.model_rebuild()
