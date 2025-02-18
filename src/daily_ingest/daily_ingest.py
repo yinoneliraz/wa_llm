@@ -173,7 +173,7 @@ if __name__ == "__main__":
     # Create engine with pooling configuration
     engine = create_async_engine(settings.db_uri)
     db_session = AsyncSession(engine)
-    
+
     embedding_client = AsyncClient(api_key=settings.voyage_api_key, max_retries=5)
     topics_loader = topicsLoader()
 

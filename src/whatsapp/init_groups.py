@@ -18,9 +18,9 @@ async def gather_groups(db_engine: AsyncEngine, client: WhatsAppClient):
                         ).model_dump()
                     )
                     await upsert(session, owner)
-                
+
                 g = await session.get(Group, g.JID)
-                
+
                 group = Group(
                     **BaseGroup(
                         group_jid=g.JID,
