@@ -1,12 +1,11 @@
 # TODO: This is a test entrypoint, remove it when we have a proper way to run the daily ingest
 import asyncio
 import logging
-from anthropic import AsyncClient
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlmodel.ext.asyncio.session import AsyncSession
 from config import Settings
 from daily_ingest.daily_ingest import topicsLoader
-
+from voyageai.client_async import AsyncClient
 
 if __name__ == "__main__":
     settings = Settings()
