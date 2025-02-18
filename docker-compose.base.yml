@@ -19,7 +19,8 @@ services:
       - "3000:3000"
     restart: always
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     volumes:
       - whatsapp:/app/storages
     environment:
@@ -29,6 +30,11 @@ services:
       - DB_URI=postgres://user:password@postgres:5432/webhook_db?sslmode=disable
       - APP_BASIC_AUTH=admin:admin
       - WHATSAPP_CHAT_STORAGE=false
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U user -d webhook_db" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
 
 volumes:
   whatsapp:

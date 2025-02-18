@@ -18,11 +18,20 @@ COPY . /app
 
 FROM python:3.12-slim-bookworm
 
+# Install cron
+RUN apt-get update && apt-get install -y cron
+
 COPY --from=builder --chown=app:app /app /app
 
 ENV PATH="/app/.venv/bin:$PATH"
 ENV PYTHONPATH="/app/src:${PYTHONPATH:-}"
 
 WORKDIR /app
+# Add cron job to execute daily_ingest.py every day at 00:00
+RUN echo "0 0 * * * python /app/app/daily_ingest.py" > /etc/cron.d/daily_ingest
+RUN chmod 0644 /etc/cron.d/daily_ingest && crontab /etc/cron.d/daily_ingest
+RUN touch /var/log/cron.log && tail -f /var/log/cron.log &
+RUN service cron start
 
-CMD ["python", "app/main.py"]
+# Start cron and the main app
+CMD service cron start && python app/main.py
