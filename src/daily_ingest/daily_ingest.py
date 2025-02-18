@@ -110,8 +110,9 @@ class topicsLoader():
 
 # TODO: This is a test entrypoint, remove it when we have a proper way to run the daily ingest
 if __name__ == "__main__":
-    DB_URI="postgresql+asyncpg://user:password@localhost:5432/webhook_db"
-    VOYAGE_API_KEY="pa-Zjvv5hZ7QCG52rvGoLVbyRoXQjSuj3w-W96iX6-6Sjb"
+    import os
+    DB_URI= os.getenv("DB_URI")
+    VOYAGE_API_KEY= os.getenv("VOYAGE_API_KEY")
 
     engine = create_async_engine(DB_URI)
     db_session = AsyncSession(engine)
