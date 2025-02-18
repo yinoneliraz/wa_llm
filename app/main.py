@@ -7,7 +7,7 @@ from fastapi import Depends, FastAPI
 from sqlmodel import SQLModel, text
 from sqlalchemy.ext.asyncio import create_async_engine
 import logging
-
+import logfire
 
 import models  # noqa
 from config import Settings
@@ -29,6 +29,8 @@ async def lifespan(app: FastAPI):
         datefmt="%Y-%m-%d %H:%M:%S",
         level=settings.log_level,
     )
+
+    logfire.configure()  
 
     app.state.settings = settings
     app.state.whatsapp = WhatsAppClient(

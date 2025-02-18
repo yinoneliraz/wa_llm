@@ -4,6 +4,7 @@ from typing import Dict, List
 from pydantic_ai import Agent
 from voyageai.client_async import AsyncClient
 from sqlmodel import desc, select
+from config import Settings
 from models import KBTopicCreate, Group, Message
 from pydantic import BaseModel, Field
 from models.knowledge_base_topic import KBTopic
@@ -152,21 +153,28 @@ class topicsLoader:
         # The result is ordered by timestamp, so the first message is the oldest
         start_time = messages[0].timestamp
         daily_topics = await get_conversation_topics(messages)
+        logger.info(f"Loaded {len(daily_topics)} topics for group {group_jid}")
         await load_topics(
             db_session, group_jid, embedding_client, daily_topics, start_time
         )
+        logger.info(f"topics loaded for group {group_jid}")
 
 
 # TODO: This is a test entrypoint, remove it when we have a proper way to run the daily ingest
 if __name__ == "__main__":
-    import os
+    settings = Settings()
 
-    DB_URI = os.getenv("DB_URI")
-    VOYAGE_API_KEY = os.getenv("VOYAGE_API_KEY")
+    logging.basicConfig(
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+        level=settings.log_level,
+    )
 
-    engine = create_async_engine(DB_URI)
+    # Create engine with pooling configuration
+    engine = create_async_engine(settings.db_uri)
     db_session = AsyncSession(engine)
-    embedding_client = AsyncClient(api_key=VOYAGE_API_KEY, max_retries=5)
+    
+    embedding_client = AsyncClient(api_key=settings.voyage_api_key, max_retries=5)
     topics_loader = topicsLoader()
 
     async def main():
