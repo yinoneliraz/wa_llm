@@ -53,6 +53,7 @@ def run_migrations_offline() -> None:
     with context.begin_transaction():
         context.run_migrations()
 
+
 def do_run_migrations(connection):
     context.configure(connection=connection, target_metadata=target_metadata)
 
@@ -66,8 +67,8 @@ async def run_async_migrations():
 
     """
     configuration = config.get_section(config.config_ini_section)
-    if not configuration.get('sqlalchemy.url'):
-        configuration['sqlalchemy.url'] = Settings().db_uri
+    if not configuration.get("sqlalchemy.url"):
+        configuration["sqlalchemy.url"] = Settings().db_uri
 
     connectable = async_engine_from_config(
         configuration,
@@ -85,6 +86,7 @@ def run_migrations_online():
     """Run migrations in 'online' mode."""
 
     asyncio.run(run_async_migrations())
+
 
 if context.is_offline_mode():
     run_migrations_offline()
