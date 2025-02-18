@@ -25,4 +25,4 @@ ENV PYTHONPATH="/app/src:${PYTHONPATH:-}"
 
 WORKDIR /app
 
-CMD ["python", "app/main.py"]
+CMD alembic upgrade head && python app/main.py
