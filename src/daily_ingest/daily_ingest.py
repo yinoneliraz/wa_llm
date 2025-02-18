@@ -10,7 +10,6 @@ from pydantic import BaseModel, Field
 from models.knowledge_base_topic import KBTopic
 from models.upsert import bulk_upsert
 from utils.voyage_embed_text import voyage_embed_text
-from sqlalchemy.ext.asyncio import create_async_engine
 from sqlmodel.ext.asyncio.session import AsyncSession
 import hashlib
 from tenacity import retry, wait_random_exponential, stop_after_attempt, after_log
@@ -159,33 +158,9 @@ class topicsLoader:
         )
         logger.info(f"topics loaded for group {group_jid}")
 
-
-# TODO: This is a test entrypoint, remove it when we have a proper way to run the daily ingest
-if __name__ == "__main__":
-    settings = Settings()
-
-    logging.basicConfig(
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-        level=settings.log_level,
-    )
-
-    # Create engine with pooling configuration
-    engine = create_async_engine(settings.db_uri)
-    db_session = AsyncSession(engine)
-
-    embedding_client = AsyncClient(api_key=settings.voyage_api_key, max_retries=5)
-    topics_loader = topicsLoader()
-
-    async def main():
+    async def load_topics_for_all_groups(self, db_session: AsyncSession, embedding_client: AsyncClient):
         groups = (await db_session.exec(select(Group))).all()
         for group in groups:
             if not group.managed:
                 continue
-            await topics_loader.load_topics(
-                db_session=db_session,
-                group_jid=group.group_jid,
-                embedding_client=embedding_client,
-            )
-
-    asyncio.run(main())
+            await self.load_topics(db_session, group.group_jid, embedding_client)
