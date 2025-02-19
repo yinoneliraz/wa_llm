@@ -165,7 +165,7 @@ class topicsLoader:
     async def load_topics_for_all_groups(
         self, session: AsyncSession, embedding_client: AsyncClient
     ):
-        groups = (await session.exec(select(Group))).all()
+        groups =  await session.exec(select(Group))
         for group in groups:
             if not group.managed:
                 continue
