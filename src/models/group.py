@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import TYPE_CHECKING, List, Optional
 
 from pydantic import field_validator
@@ -32,6 +33,9 @@ class BaseGroup(SQLModel):
     community_keys: Optional[List[str]] = Field(
         default=None, sa_column=Column(ARRAY(String))
     )
+
+    last_ingest: datetime = Field(default=datetime.now)
+    last_summary_sync: datetime = Field(default=datetime.now)
 
     @field_validator("group_jid", "owner_jid", mode="before")
     @classmethod

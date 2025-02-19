@@ -1,6 +1,6 @@
 import hashlib
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Dict, List
 
 from pydantic import BaseModel, Field
@@ -128,18 +128,14 @@ async def load_topics(
 
 class topicsLoader:
     async def load_topics(
-        self, db_session: AsyncSession, group_jid: str, embedding_client: AsyncClient
+        self, db_session: AsyncSession, group: Group, embedding_client: AsyncClient
     ):
         try:
             # Since yesterday at 12:00 UTC. Between 24 hours to 48 hours ago
-            today = datetime.utcnow().date()
-            yesterday_at_midnight = datetime.combine(
-                today - timedelta(days=1), datetime.min.time()
-            )
             stmt = (
                 select(Message)
-                .where(Message.timestamp >= yesterday_at_midnight)
-                .where(Message.group_jid == group_jid)
+                .where(Message.timestamp >= group.last_ingest)
+                .where(Message.group_jid == group.group_jid)
                 .order_by(desc(Message.timestamp))
             )
             res = await db_session.exec(stmt)
@@ -147,19 +143,21 @@ class topicsLoader:
             messages = list(res.all())
 
             if len(messages) == 0:
-                logger.info(f"No messages found for group {group_jid}")
+                logger.info(f"No messages found for group {group.group_jid}")
                 return
 
             # The result is ordered by timestamp, so the first message is the oldest
             start_time = messages[0].timestamp
             daily_topics = await get_conversation_topics(messages)
-            logger.info(f"Loaded {len(daily_topics)} topics for group {group_jid}")
-            await load_topics(
-                db_session, group_jid, embedding_client, daily_topics, start_time
+            logger.info(
+                f"Loaded {len(daily_topics)} topics for group {group.group_jid}"
             )
-            logger.info(f"topics loaded for group {group_jid}")
+            await load_topics(
+                db_session, group.group_jid, embedding_client, daily_topics, start_time
+            )
+            logger.info(f"topics loaded for group {group.group_jid}")
         except Exception as e:
-            logger.error(f"Error loading topics for group {group_jid}: {str(e)}")
+            logger.error(f"Error loading topics for group {group.group_jid}: {str(e)}")
             raise
 
     async def load_topics_for_all_groups(
@@ -167,4 +165,4 @@ class topicsLoader:
     ):
         groups = await session.exec(select(Group).where(Group.managed is True))
         for group in list(groups.all()):
-            await self.load_topics(session, group.group_jid, embedding_client)
+            await self.load_topics(session, group, embedding_client)
