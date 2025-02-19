@@ -1,6 +1,7 @@
 from typing import List
+
 from sqlalchemy.dialects.postgresql import insert
-from sqlmodel import SQLModel
+from sqlmodel import SQLModel, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 
@@ -22,7 +23,17 @@ async def upsert(session: AsyncSession, entity: SQLModel):
         },
     )
 
-    return await session.exec(stmt)
+    await session.exec(stmt)
+
+    # Query for the updated instance
+    select_stmt = select(entity.__class__).where(
+        *[getattr(entity.__class__, k) == v for k, v in pkeys.items()]
+    )
+    db_instance = await session.exec(select_stmt)
+    result = db_instance.first()
+
+    # Merge the instance into the session
+    return result
 
 
 async def bulk_upsert(session: AsyncSession, entities: List[SQLModel]):

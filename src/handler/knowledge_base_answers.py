@@ -1,8 +1,9 @@
 import logging
+
 from pydantic_ai import Agent
+from sqlmodel import select, cast, String
 
 from models import Message, KBTopic
-from sqlmodel import select, cast, String
 from utils.voyage_embed_text import voyage_embed_text
 from .base_handler import BaseHandler
 
@@ -14,8 +15,10 @@ class KnowledgeBaseAnswers(BaseHandler):
     async def __call__(self, message: Message):
         rephrased_agent = Agent(
             model="anthropic:claude-3-5-haiku-latest",
-            system_prompt="""Phrase the following query as a short paragraph describing a summary from the knowledge base.
+            system_prompt=f"""Phrase the following message as a short paragraph describing a query from the knowledge base.
             - Use English only!
+            - Ensure only to include the query itself. The message that includes a lot of information - focus on what the user asks you.
+            - Your name is @{(await self.whatsapp.get_my_jid()).user}
             - ONLY answer with the new phrased query, no other text!""",
         )
 
@@ -75,6 +78,7 @@ class KnowledgeBaseAnswers(BaseHandler):
         logger.info(
             "RAG Query Results:\n"
             f"Question: {message.text}\n"
+            f"Rephrased Question: {rephrased_response.data}\n"
             f"Chat JID: {message.chat_jid}\n"
             f"Retrieved Topics: {len(similar_topics)}\n"
             "Topics:\n"

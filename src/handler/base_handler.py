@@ -69,11 +69,7 @@ class BaseHandler:
                     await self.session.flush()
 
             # Finally add the message
-            self.session.add(message)
-            await self.session.flush()
-
-        await self.session.refresh(message)
-        return message
+            return await self.upsert(message)
 
     async def send_message(
         self, to_jid: str, message: str, in_reply_to: str | None = None

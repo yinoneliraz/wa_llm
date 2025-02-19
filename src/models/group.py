@@ -34,8 +34,8 @@ class BaseGroup(SQLModel):
         default=None, sa_column=Column(ARRAY(String))
     )
 
-    last_ingest: datetime = Field(default=datetime.now)
-    last_summary_sync: datetime = Field(default=datetime.now)
+    last_ingest: datetime = Field(default_factory=datetime.now)
+    last_summary_sync: datetime = Field(default_factory=datetime.now)
 
     @field_validator("group_jid", "owner_jid", mode="before")
     @classmethod
