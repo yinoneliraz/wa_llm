@@ -23,7 +23,7 @@ async def gather_groups(db_engine: AsyncEngine, client: WhatsAppClient):
 
                 group = Group(
                     **BaseGroup(
-                        group_jid=g.group_jid,
+                        group_jid=g.JID,
                         group_name=g.Name,
                         group_topic=g.Topic,
                         owner_jid=g.OwnerJID,
