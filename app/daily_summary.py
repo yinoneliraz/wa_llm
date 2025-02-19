@@ -5,10 +5,9 @@ import logging
 import logfire
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlmodel.ext.asyncio.session import AsyncSession
-from config import Settings
-from daily_ingest.daily_ingest import topicsLoader
-from voyageai.client_async import AsyncClient
 
+from config import Settings
+from daily_summary_sync import daily_summary_sync
 from whatsapp import WhatsAppClient
 
 
@@ -27,16 +26,13 @@ async def main():
         settings.whatsapp_basic_auth_user,
         settings.whatsapp_basic_auth_password,
     )
-
-    embedding_client = AsyncClient(api_key=settings.voyage_api_key, max_retries=5)
     
     # Create engine with pooling configuration
     db_engine = create_async_engine(settings.db_uri)
     
     async with AsyncSession(db_engine) as session:
         try:
-            topics_loader = topicsLoader()
-            await topics_loader.load_topics_for_all_groups(session, embedding_client, whatsapp)
+            await daily_summary_sync(session, whatsapp)
             await session.commit()
         except Exception:
             await session.rollback()

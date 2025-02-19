@@ -14,6 +14,7 @@ from models import KBTopicCreate, Group, Message
 from models.knowledge_base_topic import KBTopic
 from models.upsert import bulk_upsert
 from utils.voyage_embed_text import voyage_embed_text
+from whatsapp import WhatsAppClient
 
 logger = logging.getLogger(__name__)
 
@@ -128,7 +129,7 @@ async def load_topics(
 
 class topicsLoader:
     async def load_topics(
-        self, db_session: AsyncSession, group: Group, embedding_client: AsyncClient
+        self, db_session: AsyncSession, group: Group, embedding_client: AsyncClient, whatsapp: WhatsAppClient
     ):
         try:
             # Since yesterday at 12:00 UTC. Between 24 hours to 48 hours ago
@@ -136,6 +137,7 @@ class topicsLoader:
                 select(Message)
                 .where(Message.timestamp >= group.last_ingest)
                 .where(Message.group_jid == group.group_jid)
+                .where(Message.sender_jid != await whatsapp.get_my_jid())
                 .order_by(desc(Message.timestamp))
             )
             res = await db_session.exec(stmt)
@@ -161,8 +163,8 @@ class topicsLoader:
             raise
 
     async def load_topics_for_all_groups(
-        self, session: AsyncSession, embedding_client: AsyncClient
+        self, session: AsyncSession, embedding_client: AsyncClient, whatsapp: WhatsAppClient
     ):
         groups = await session.exec(select(Group).where(Group.managed is True))
         for group in list(groups.all()):
-            await self.load_topics(session, group, embedding_client)
+            await self.load_topics(session, group, embedding_client, whatsapp)
