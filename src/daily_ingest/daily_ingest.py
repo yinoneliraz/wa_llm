@@ -166,5 +166,5 @@ class topicsLoader:
         self, session: AsyncSession, embedding_client: AsyncClient
     ):
         groups = await session.exec(select(Group).where(Group.managed is True))
-        async for group in groups:
+        for group in list(groups.all()):
             await self.load_topics(session, group.group_jid, embedding_client)
