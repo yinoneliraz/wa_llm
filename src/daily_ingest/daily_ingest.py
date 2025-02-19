@@ -130,39 +130,49 @@ class topicsLoader:
     async def load_topics(
         self, db_session: AsyncSession, group_jid: str, embedding_client: AsyncClient
     ):
-        # Since yesterday at 12:00 UTC. Between 24 hours to 48 hours ago
-        # This function is probably be called every day at at midnight+1 UTC
-        today = datetime.utcnow().date()
-        yesterday_at_midnight = datetime.combine(
-            today - timedelta(days=1), datetime.min.time()
-        )
-        stmt = (
-            select(Message)
-            .where(Message.timestamp >= yesterday_at_midnight)
-            .where(Message.group_jid == group_jid)
-            .order_by(desc(Message.timestamp))
-        )
-        res = await db_session.exec(stmt)
-        messages: list[Message] = res.all()
+        try:
+            # Since yesterday at 12:00 UTC. Between 24 hours to 48 hours ago
+            today = datetime.utcnow().date()
+            yesterday_at_midnight = datetime.combine(
+                today - timedelta(days=1), datetime.min.time()
+            )
+            stmt = (
+                select(Message)
+                .where(Message.timestamp >= yesterday_at_midnight)
+                .where(Message.group_jid == group_jid)
+                .order_by(desc(Message.timestamp))
+            )
+            res = await db_session.exec(stmt)
+            # Convert Sequence to list explicitly
+            messages = list(res.all())
 
-        if len(messages) == 0:
-            print("No messages found for group", group_jid)
-            return
+            if len(messages) == 0:
+                logger.info(f"No messages found for group {group_jid}")
+                return
 
-        # The result is ordered by timestamp, so the first message is the oldest
-        start_time = messages[0].timestamp
-        daily_topics = await get_conversation_topics(messages)
-        logger.info(f"Loaded {len(daily_topics)} topics for group {group_jid}")
-        await load_topics(
-            db_session, group_jid, embedding_client, daily_topics, start_time
-        )
-        logger.info(f"topics loaded for group {group_jid}")
+            # The result is ordered by timestamp, so the first message is the oldest
+            start_time = messages[0].timestamp
+            daily_topics = await get_conversation_topics(messages)
+            logger.info(f"Loaded {len(daily_topics)} topics for group {group_jid}")
+            await load_topics(
+                db_session, group_jid, embedding_client, daily_topics, start_time
+            )
+            logger.info(f"topics loaded for group {group_jid}")
+        except Exception as e:
+            logger.error(f"Error loading topics for group {group_jid}: {str(e)}")
+            raise
 
     async def load_topics_for_all_groups(
         self, db_session: AsyncSession, embedding_client: AsyncClient
     ):
-        groups = (await db_session.exec(select(Group))).all()
-        for group in groups:
-            if not group.managed:
-                continue
-            await self.load_topics(db_session, group.group_jid, embedding_client)
+        try:
+            async with db_session as session:
+                groups = (await session.exec(select(Group))).all()
+                for group in groups:
+                    if not group.managed:
+                        continue
+                    await self.load_topics(session, group.group_jid, embedding_client)
+                await session.commit()
+        except Exception as e:
+            logger.error(f"Error in load_topics_for_all_groups: {str(e)}")
+            raise
