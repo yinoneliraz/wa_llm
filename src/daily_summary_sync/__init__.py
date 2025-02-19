@@ -59,7 +59,7 @@ async def daily_summary_sync(session: AsyncSession, whatsapp: WhatsAppClient):
     groups = await session.exec(select(Group).where(Group.managed is True))
 
     tasks = [sync_group(session, whatsapp, group) for group in list(groups.all())]
-    errs = asyncio.gather(tasks, return_exceptions=True)
+    errs = asyncio.gather(*tasks, return_exceptions=True)
     for e in errs:
         if isinstance(e, BaseException):
             logging.error("Error syncing group: %s", e)
