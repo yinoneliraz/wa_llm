@@ -1,6 +1,8 @@
 # TODO: This is a test entrypoint, remove it when we have a proper way to run the daily ingest
 import asyncio
 import logging
+
+import logfire
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlmodel.ext.asyncio.session import AsyncSession
 from config import Settings
@@ -16,6 +18,7 @@ if __name__ == "__main__":
         level=settings.log_level,
     )
 
+    logfire.configure()
     # Create engine with pooling configuration
     engine = create_async_engine(settings.db_uri)
     db_session = AsyncSession(engine)
