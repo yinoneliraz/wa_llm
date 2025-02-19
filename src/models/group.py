@@ -27,7 +27,7 @@ class BaseGroup(SQLModel):
     group_name: Optional[str] = Field(default=None, max_length=255)
     group_topic: Optional[str] = Field(default=None)
     owner_jid: Optional[str] = Field(
-        max_length=255, foreign_key="sender.jid", nullable=True
+        max_length=255, foreign_key="sender.jid", nullable=True, default=None
     )
     managed: bool = Field(default=False)
     community_keys: Optional[List[str]] = Field(

@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from sqlalchemy.ext.asyncio import AsyncEngine
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -29,6 +31,8 @@ async def gather_groups(db_engine: AsyncEngine, client: WhatsAppClient):
                         owner_jid=g.OwnerJID,
                         managed=og.managed if og else False,
                         community_keys=og.community_keys if og else None,
+                        last_ingest=og.last_ingest if og else datetime.now(),
+                        last_summary_sync=og.last_summary_sync if og else datetime.now(),
                     ).model_dump()
                 )
                 await upsert(session, group)
