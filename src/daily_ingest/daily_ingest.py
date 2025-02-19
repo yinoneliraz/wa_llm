@@ -1,19 +1,19 @@
-import asyncio
+import hashlib
+import logging
 from datetime import datetime, timedelta
 from typing import Dict, List
-from pydantic_ai import Agent
-from voyageai.client_async import AsyncClient
-from sqlmodel import desc, select
-from config import Settings
-from models import KBTopicCreate, Group, Message
+
 from pydantic import BaseModel, Field
+from pydantic_ai import Agent
+from sqlmodel import desc, select
+from sqlmodel.ext.asyncio.session import AsyncSession
+from tenacity import retry, wait_random_exponential, stop_after_attempt, after_log
+from voyageai.client_async import AsyncClient
+
+from models import KBTopicCreate, Group, Message
 from models.knowledge_base_topic import KBTopic
 from models.upsert import bulk_upsert
 from utils.voyage_embed_text import voyage_embed_text
-from sqlmodel.ext.asyncio.session import AsyncSession
-import hashlib
-from tenacity import retry, wait_random_exponential, stop_after_attempt, after_log
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -163,16 +163,10 @@ class topicsLoader:
             raise
 
     async def load_topics_for_all_groups(
-        self, db_session: AsyncSession, embedding_client: AsyncClient
+        self, session: AsyncSession, embedding_client: AsyncClient
     ):
-        try:
-            async with db_session as session:
-                groups = (await session.exec(select(Group))).all()
-                for group in groups:
-                    if not group.managed:
-                        continue
-                    await self.load_topics(session, group.group_jid, embedding_client)
-                await session.commit()
-        except Exception as e:
-            logger.error(f"Error in load_topics_for_all_groups: {str(e)}")
-            raise
+        groups = (await session.exec(select(Group))).all()
+        for group in groups:
+            if not group.managed:
+                continue
+            await self.load_topics(session, group.group_jid, embedding_client)
