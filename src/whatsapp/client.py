@@ -39,7 +39,7 @@ class WhatsAppClient:
         base_url: str = "http://localhost:3000",
         username: Optional[str] = None,
         password: Optional[str] = None,
-        timeout: float = httpx.Timeout(30.0),
+        timeout: float = httpx.Timeout(300.0),
     ):
         """
         Initialize WhatsApp Client
