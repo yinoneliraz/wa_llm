@@ -32,8 +32,10 @@ async def main():
     
     async with AsyncSession(db_engine) as session:
         try:
+            logging.info("Starting sync")
             await daily_summary_sync(session, whatsapp)
             await session.commit()
+            logging.info("Finished sync")
         except Exception:
             await session.rollback()
             raise

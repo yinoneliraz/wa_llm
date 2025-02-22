@@ -107,6 +107,8 @@ async def load_topics(
     topics_embeddings = await voyage_embed_text(embedding_client, documents)
 
     doc_models = [
+        # TODO: Replace topic.subject with something else that is deterministic.
+        # topic.subject is not deterministic because it's the result of the LLM.
         KBTopicCreate(
             id=str(
                 hashlib.sha256(

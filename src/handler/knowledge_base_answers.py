@@ -4,6 +4,7 @@ from pydantic_ai import Agent
 from sqlmodel import select, cast, String
 
 from models import Message, KBTopic
+from models.jid import parse_jid
 from utils.voyage_embed_text import voyage_embed_text
 from .base_handler import BaseHandler
 
@@ -55,6 +56,7 @@ class KnowledgeBaseAnswers(BaseHandler):
         for result in retrieved_topics:
             similar_topics.append(f"{result.subject} \n {result.summary}")
 
+        sender_number = parse_jid(message.sender_jid).user
         generation_agent = Agent(
             model="anthropic:claude-3-5-sonnet-latest",
             system_prompt="""Based on the topics attached, write a response to the query.
@@ -67,6 +69,9 @@ class KnowledgeBaseAnswers(BaseHandler):
         )
 
         prompt_template = f"""
+        # Sender:
+        {f'@{sender_number}'}
+        
         # Query:
         {message.text}
         
@@ -77,6 +82,7 @@ class KnowledgeBaseAnswers(BaseHandler):
         generation_response = await generation_agent.run(prompt_template)
         logger.info(
             "RAG Query Results:\n"
+            f"Sender: {sender_number}\n"
             f"Question: {message.text}\n"
             f"Rephrased Question: {rephrased_response.data}\n"
             f"Chat JID: {message.chat_jid}\n"
