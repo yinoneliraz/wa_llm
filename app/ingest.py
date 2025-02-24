@@ -30,7 +30,6 @@ async def main():
 
     embedding_client = AsyncClient(api_key=settings.voyage_api_key, max_retries=5)
     
-    # Create engine with pooling configuration
     db_engine = create_async_engine(settings.db_uri)
     
     async with AsyncSession(db_engine) as session:
@@ -41,6 +40,9 @@ async def main():
         except Exception:
             await session.rollback()
             raise
+
+    # Clean up
+    await db_engine.dispose()
 
 if __name__ == "__main__":
     asyncio.run(main())

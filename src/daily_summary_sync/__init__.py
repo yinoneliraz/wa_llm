@@ -1,4 +1,5 @@
 import asyncio
+from datetime import datetime
 import logging
 
 from pydantic_ai import Agent
@@ -54,11 +55,14 @@ async def sync_group(session, whatsapp: WhatsAppClient, group: Group):
             SendMessageRequest(phone=cg.group_jid, message=response.data)
         )
 
+    group.last_summary_sync = datetime.now()
+    await session.commit()
+
 
 async def daily_summary_sync(session: AsyncSession, whatsapp: WhatsAppClient):
     groups = await session.exec(select(Group).where(Group.managed == True))
     tasks = [sync_group(session, whatsapp, group) for group in list(groups.all())]
-    errs = asyncio.gather(*tasks, return_exceptions=True)
+    errs = await asyncio.gather(*tasks, return_exceptions=True)
     for e in errs:
         if isinstance(e, BaseException):
             logging.error("Error syncing group: %s", e)

@@ -98,7 +98,7 @@ Break the conversation into a list of topics.
 
 async def load_topics(
     db_session: AsyncSession,
-    group_jid: str,
+    group: Group,
     embedding_client: AsyncClient,
     topics: List[Topic],
     start_time: datetime,
@@ -112,11 +112,11 @@ async def load_topics(
         KBTopicCreate(
             id=str(
                 hashlib.sha256(
-                    f"{group_jid}_{start_time}_{topic.subject}".encode()
+                    f"{group.group_jid}_{start_time}_{topic.subject}".encode()
                 ).hexdigest()
             ),
             embedding=emb,
-            group_jid=group_jid,
+            group_jid=group.group_jid,
             start_time=start_time,
             speakers=",".join(topic.speakers),
             summary=topic.summary,
@@ -126,6 +126,7 @@ async def load_topics(
     ]
     # Once we give a meaningfull ID, we should migrate to upsert!
     await bulk_upsert(db_session, [KBTopic(**doc.model_dump()) for doc in doc_models])
+    group.last_ingest = datetime.now()
     await db_session.commit()
 
 
@@ -139,7 +140,7 @@ class topicsLoader:
                 select(Message)
                 .where(Message.timestamp >= group.last_ingest)
                 .where(Message.group_jid == group.group_jid)
-                .where(Message.sender_jid != await whatsapp.get_my_jid())
+                .where(Message.sender_jid != str(await whatsapp.get_my_jid()))
                 .order_by(desc(Message.timestamp))
             )
             res = await db_session.exec(stmt)
@@ -157,7 +158,7 @@ class topicsLoader:
                 f"Loaded {len(daily_topics)} topics for group {group.group_jid}"
             )
             await load_topics(
-                db_session, group.group_jid, embedding_client, daily_topics, start_time
+                db_session, group, embedding_client, daily_topics, start_time
             )
             logger.info(f"topics loaded for group {group.group_jid}")
         except Exception as e:
