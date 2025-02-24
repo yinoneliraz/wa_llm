@@ -126,7 +126,10 @@ async def load_topics(
     ]
     # Once we give a meaningfull ID, we should migrate to upsert!
     await bulk_upsert(db_session, [KBTopic(**doc.model_dump()) for doc in doc_models])
+
+    # Update the group with the new last_ingest
     group.last_ingest = datetime.now()
+    db_session.add(group)
     await db_session.commit()
 
 
@@ -148,21 +151,21 @@ class topicsLoader:
             messages = list(res.all())
 
             if len(messages) == 0:
-                logger.info(f"No messages found for group {group.group_jid}")
+                logger.info(f"No messages found for group {group.group_name}")
                 return
 
             # The result is ordered by timestamp, so the first message is the oldest
             start_time = messages[0].timestamp
             daily_topics = await get_conversation_topics(messages)
             logger.info(
-                f"Loaded {len(daily_topics)} topics for group {group.group_jid}"
+                f"Loaded {len(daily_topics)} topics for group {group.group_name}"
             )
             await load_topics(
                 db_session, group, embedding_client, daily_topics, start_time
             )
-            logger.info(f"topics loaded for group {group.group_jid}")
+            logger.info(f"topics loaded for group {group.group_name}")
         except Exception as e:
-            logger.error(f"Error loading topics for group {group.group_jid}: {str(e)}")
+            logger.error(f"Error loading topics for group {group.group_name}: {str(e)}")
             raise
 
     async def load_topics_for_all_groups(

@@ -55,7 +55,9 @@ async def sync_group(session, whatsapp: WhatsAppClient, group: Group):
             SendMessageRequest(phone=cg.group_jid, message=response.data)
         )
 
+    # Update the    group with the new last_summary_sync
     group.last_summary_sync = datetime.now()
+    session.add(group)
     await session.commit()
 
 
