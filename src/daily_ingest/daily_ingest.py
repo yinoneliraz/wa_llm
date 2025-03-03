@@ -5,6 +5,7 @@ from typing import Dict, List
 
 from pydantic import BaseModel, Field
 from pydantic_ai import Agent
+from pydantic_ai.result import RunResult
 from sqlmodel import desc, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 from tenacity import retry, wait_random_exponential, stop_after_attempt, after_log
@@ -45,15 +46,24 @@ def _remap_user_mapping_to_tagged_users(
     return message
 
 
-async def get_conversation_topics(messages: list[Message]) -> List[Topic]:
-    @retry(
-        wait=wait_random_exponential(min=1, max=30),
-        stop=stop_after_attempt(6),
-        after=after_log(logger, logging.ERROR),
+@retry(
+    wait=wait_random_exponential(min=1, max=30),
+    stop=stop_after_attempt(6),
+    after=after_log(logger, logging.ERROR),
+)
+async def conversation_splitter_agent(content: str) -> RunResult[List[Topic]]:
+    agent = Agent(
+        model="anthropic:claude-3-5-sonnet-latest",
+        system_prompt="""This conversation is a chain of messages that was uninterrupted by a break in the conversation of up to 3 hours.
+Break the conversation into a list of topics.
+""",
+        result_type=List[Topic],
+        retries=5,
     )
-    async def _run_agent(content):
-        return await agent.run(content)
 
+    return await agent.run(content)
+
+async def get_conversation_topics(messages: list[Message]) -> List[Topic]:
     sender_jids = {msg.sender_jid for msg in messages}
     speaker_mapping = {
         sender_jid: f"@user_{i+1}" for i, sender_jid in enumerate(sender_jids)
@@ -72,16 +82,7 @@ async def get_conversation_topics(messages: list[Message]) -> List[Topic]:
         ]
     )
 
-    agent = Agent(
-        model="anthropic:claude-3-5-sonnet-latest",
-        system_prompt="""This conversation is a chain of messages that was uninterrupted by a break in the conversation of up to 3 hours.
-Break the conversation into a list of topics.
-""",
-        result_type=List[Topic],
-        retries=5,
-    )
-
-    result = await _run_agent(conversation_content)
+    result = await conversation_splitter_agent(conversation_content)
     for topic in result.data:
         # If for some reason the speaker is not in the mapping, keep the original speaker
         # This case was needed when the speaker is not in the mapping because the user was not in the chat
@@ -129,7 +130,11 @@ async def load_topics(
 
 class topicsLoader:
     async def load_topics(
-        self, db_session: AsyncSession, group: Group, embedding_client: AsyncClient, whatsapp: WhatsAppClient
+        self,
+        db_session: AsyncSession,
+        group: Group,
+        embedding_client: AsyncClient,
+        whatsapp: WhatsAppClient,
     ):
         try:
             # Since yesterday at 12:00 UTC. Between 24 hours to 48 hours ago
@@ -137,7 +142,9 @@ class topicsLoader:
                 select(Message)
                 .where(Message.timestamp >= group.last_ingest)
                 .where(Message.group_jid == group.group_jid)
-                .where(Message.sender_jid != await whatsapp.get_my_jid())
+                .where(
+                    Message.sender_jid != (await whatsapp.get_my_jid()).normalize_str()
+                )
                 .order_by(desc(Message.timestamp))
             )
             res = await db_session.exec(stmt)
@@ -163,7 +170,10 @@ class topicsLoader:
             raise
 
     async def load_topics_for_all_groups(
-        self, session: AsyncSession, embedding_client: AsyncClient, whatsapp: WhatsAppClient
+        self,
+        session: AsyncSession,
+        embedding_client: AsyncClient,
+        whatsapp: WhatsAppClient,
     ):
         groups = await session.exec(select(Group).where(Group.managed is True))
         for group in list(groups.all()):

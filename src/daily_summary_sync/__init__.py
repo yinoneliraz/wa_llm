@@ -2,6 +2,7 @@ import asyncio
 import logging
 
 from pydantic_ai import Agent
+from pydantic_ai.result import RunResult
 from sqlmodel import select, desc
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -9,27 +10,22 @@ from models import Group, Message
 from models.jid import parse_jid
 from whatsapp import WhatsAppClient, SendMessageRequest
 
+from tenacity import retry, wait_random_exponential, stop_after_attempt, after_log
 
-async def sync_group(session, whatsapp: WhatsAppClient, group: Group):
-    messages = await session.exec(
-        select(Message)
-        .where(Message.group_jid == group.group_jid)
-        .where(Message.timestamp >= group.last_summary_sync)
-        .where(Message.sender_jid != await whatsapp.get_my_jid())
-        .order_by(desc(Message.timestamp))
-    )
-    messages: list[Message] = messages.all()
+logger = logging.getLogger(__name__)
 
-    if len(messages) < 7:
-        logging.info("Not enough messages to summarize in group %s", group.group_name)
-        return
-
+@retry(
+    wait=wait_random_exponential(min=1, max=30),
+    stop=stop_after_attempt(6),
+    after=after_log(logger, logging.ERROR),
+)
+async def summarize(group_name: str, messages: list[Message]) -> RunResult[str]:
     agent = Agent(
         model="anthropic:claude-3-5-haiku-latest",
         system_prompt=f""""
         Write a quick summary of what happened in the chat group since the last summary.
         
-        - Start by stating this is a quick summary of what happened in "{group.group_name}" group recently.
+        - Start by stating this is a quick summary of what happened in "{group_name}" group recently.
         - Use a casual conversational writing style.
         - Keep it short and sweet.
         - Write in the same language as the chat group.
@@ -38,7 +34,7 @@ async def sync_group(session, whatsapp: WhatsAppClient, group: Group):
         result_type=str,
     )
 
-    response = await agent.run(
+    return await agent.run(
         "\n".join(
             [
                 f"{message.timestamp}: @{parse_jid(message.sender_jid).user}: {message.text}"
@@ -46,6 +42,22 @@ async def sync_group(session, whatsapp: WhatsAppClient, group: Group):
             ]
         )
     )
+
+async def sync_group(session, whatsapp: WhatsAppClient, group: Group):
+    messages = await session.exec(
+        select(Message)
+        .where(Message.group_jid == group.group_jid)
+        .where(Message.timestamp >= group.last_summary_sync)
+        .where(Message.sender_jid != (await whatsapp.get_my_jid()).normalize_str())
+        .order_by(desc(Message.timestamp))
+    )
+    messages: list[Message] = messages.all()
+
+    if len(messages) < 7:
+        logging.info("Not enough messages to summarize in group %s", group.group_name)
+        return
+
+    response = await summarize(group.group_name, messages)
 
     community_groups = await group.get_related_community_groups(session)
 
