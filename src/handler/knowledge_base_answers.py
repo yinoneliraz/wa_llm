@@ -7,6 +7,7 @@ from tenacity import retry, wait_random_exponential, stop_after_attempt, after_l
 
 from models import Message, KBTopic
 from utils.voyage_embed_text import voyage_embed_text
+from models.jid import parse_jid
 from .base_handler import BaseHandler
 
 # Creating an object
@@ -49,9 +50,11 @@ class KnowledgeBaseAnswers(BaseHandler):
         for result in retrieved_topics:
             similar_topics.append(f"{result.subject} \n {result.summary}")
 
-        generation_response = await self.generation_agent(message.text, similar_topics)
+        sender_number = parse_jid(message.sender_jid).user
+        generation_response = await self.generation_agent(message.text, similar_topics, message.sender_jid)
         logger.info(
             "RAG Query Results:\n"
+            f"Sender: {sender_number}\n"
             f"Question: {message.text}\n"
             f"Rephrased Question: {rephrased_response.data}\n"
             f"Chat JID: {message.chat_jid}\n"
@@ -69,7 +72,7 @@ class KnowledgeBaseAnswers(BaseHandler):
         stop=stop_after_attempt(6),
         after=after_log(logger, logging.ERROR),
     )
-    async def generation_agent(self, query: str, topics: list[str]) -> RunResult[str]:
+    async def generation_agent(self, query: str, topics: list[str], sender: str) -> RunResult[str]:
         agent = Agent(
             model="anthropic:claude-3-5-sonnet-latest",
             system_prompt="""Based on the topics attached, write a response to the query.
@@ -83,7 +86,7 @@ class KnowledgeBaseAnswers(BaseHandler):
 
         prompt_template = f"""
         # Query:
-        {query}
+        {f'@{sender}'}: {query}
         
         # Related Topics:
         {"\n---\n".join(topics) if len(topics) > 0 else "No related topics found."}

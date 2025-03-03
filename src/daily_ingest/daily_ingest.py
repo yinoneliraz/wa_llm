@@ -63,6 +63,7 @@ Break the conversation into a list of topics.
 
     return await agent.run(content)
 
+
 async def get_conversation_topics(messages: list[Message]) -> List[Topic]:
     sender_jids = {msg.sender_jid for msg in messages}
     speaker_mapping = {
@@ -99,7 +100,7 @@ async def get_conversation_topics(messages: list[Message]) -> List[Topic]:
 
 async def load_topics(
     db_session: AsyncSession,
-    group_jid: str,
+    group: Group,
     embedding_client: AsyncClient,
     topics: List[Topic],
     start_time: datetime,
@@ -108,14 +109,16 @@ async def load_topics(
     topics_embeddings = await voyage_embed_text(embedding_client, documents)
 
     doc_models = [
+        # TODO: Replace topic.subject with something else that is deterministic.
+        # topic.subject is not deterministic because it's the result of the LLM.
         KBTopicCreate(
             id=str(
                 hashlib.sha256(
-                    f"{group_jid}_{start_time}_{topic.subject}".encode()
+                    f"{group.group_jid}_{start_time}_{topic.subject}".encode()
                 ).hexdigest()
             ),
             embedding=emb,
-            group_jid=group_jid,
+            group_jid=group.group_jid,
             start_time=start_time,
             speakers=",".join(topic.speakers),
             summary=topic.summary,
@@ -125,6 +128,10 @@ async def load_topics(
     ]
     # Once we give a meaningfull ID, we should migrate to upsert!
     await bulk_upsert(db_session, [KBTopic(**doc.model_dump()) for doc in doc_models])
+
+    # Update the group with the new last_ingest
+    group.last_ingest = datetime.now()
+    db_session.add(group)
     await db_session.commit()
 
 
@@ -152,21 +159,21 @@ class topicsLoader:
             messages = list(res.all())
 
             if len(messages) == 0:
-                logger.info(f"No messages found for group {group.group_jid}")
+                logger.info(f"No messages found for group {group.group_name}")
                 return
 
             # The result is ordered by timestamp, so the first message is the oldest
             start_time = messages[0].timestamp
             daily_topics = await get_conversation_topics(messages)
             logger.info(
-                f"Loaded {len(daily_topics)} topics for group {group.group_jid}"
+                f"Loaded {len(daily_topics)} topics for group {group.group_name}"
             )
             await load_topics(
-                db_session, group.group_jid, embedding_client, daily_topics, start_time
+                db_session, group, embedding_client, daily_topics, start_time
             )
-            logger.info(f"topics loaded for group {group.group_jid}")
+            logger.info(f"topics loaded for group {group.group_name}")
         except Exception as e:
-            logger.error(f"Error loading topics for group {group.group_jid}: {str(e)}")
+            logger.error(f"Error loading topics for group {group.group_name}: {str(e)}")
             raise
 
     async def load_topics_for_all_groups(
@@ -175,6 +182,6 @@ class topicsLoader:
         embedding_client: AsyncClient,
         whatsapp: WhatsAppClient,
     ):
-        groups = await session.exec(select(Group).where(Group.managed is True))
+        groups = await session.exec(select(Group).where(Group.managed == True))
         for group in list(groups.all()):
             await self.load_topics(session, group, embedding_client, whatsapp)

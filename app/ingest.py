@@ -30,17 +30,16 @@ async def main():
 
     embedding_client = AsyncClient(api_key=settings.voyage_api_key, max_retries=5)
     
-    # Create engine with pooling configuration
-    db_engine = create_async_engine(settings.db_uri)
+    # Create async engine using settings
+    engine = create_async_engine(settings.db_uri)
     
-    async with AsyncSession(db_engine) as session:
-        try:
-            topics_loader = topicsLoader()
-            await topics_loader.load_topics_for_all_groups(session, embedding_client, whatsapp)
-            await session.commit()
-        except Exception:
-            await session.rollback()
-            raise
+    # Create session with the async engine
+    async with AsyncSession(engine, expire_on_commit=False) as session:
+        topics_loader = topicsLoader()
+        await topics_loader.load_topics_for_all_groups(session, embedding_client, whatsapp)
+    
+    # Clean up
+    await engine.dispose()
 
 if __name__ == "__main__":
     asyncio.run(main())
