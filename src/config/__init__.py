@@ -14,7 +14,6 @@ class Settings(BaseSettings):
     db_uri: str
 
     # WhatsApp settings
-    my_number: str
     whatsapp_host: str
     whatsapp_basic_auth_password: Optional[str] = None
     whatsapp_basic_auth_user: Optional[str] = None
@@ -28,6 +27,7 @@ class Settings(BaseSettings):
     # Optional settings
     debug: bool = False
     log_level: str = "INFO"
+    logfire_token: str
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -41,5 +41,8 @@ class Settings(BaseSettings):
     def apply_env(self) -> Self:
         if self.anthropic_api_key:
             environ["ANTHROPIC_API_KEY"] = self.anthropic_api_key
+        
+        if self.logfire_token:
+            environ["LOGFIRE_TOKEN"] = self.logfire_token
 
         return self

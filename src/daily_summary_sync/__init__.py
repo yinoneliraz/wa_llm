@@ -45,6 +45,11 @@ async def summarize(group_name: str, messages: list[Message]) -> RunResult[str]:
 
 
 async def sync_group(session, whatsapp: WhatsAppClient, group: Group):
+    community_groups = await group.get_related_community_groups(session)
+    if not community_groups:
+        logging.info("No community groups found for group %s", group.group_name)
+        return
+
     messages = await session.exec(
         select(Message)
         .where(Message.group_jid == group.group_jid)
@@ -60,14 +65,12 @@ async def sync_group(session, whatsapp: WhatsAppClient, group: Group):
 
     response = await summarize(group.group_name, messages)
 
-    community_groups = await group.get_related_community_groups(session)
-
     for cg in community_groups:
         await whatsapp.send_message(
             SendMessageRequest(phone=cg.group_jid, message=response.data)
         )
 
-    # Update the    group with the new last_summary_sync
+    # Update the group with the new last_summary_sync
     group.last_summary_sync = datetime.now()
     session.add(group)
     await session.commit()

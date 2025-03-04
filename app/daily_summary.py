@@ -3,7 +3,7 @@ import asyncio
 import logging
 
 import logfire
-from sqlalchemy.ext.asyncio import create_async_engine
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from config import Settings
@@ -26,11 +26,14 @@ async def main():
         settings.whatsapp_basic_auth_user,
         settings.whatsapp_basic_auth_password,
     )
-    
+
     # Create engine with pooling configuration
-    db_engine = create_async_engine(settings.db_uri)
-    
-    async with AsyncSession(db_engine) as session:
+    engine = create_async_engine(settings.db_uri)
+    async_session = async_sessionmaker(
+        engine, expire_on_commit=False, class_=AsyncSession
+    )
+
+    async with async_session() as session:
         try:
             logging.info("Starting sync")
             await daily_summary_sync(session, whatsapp)
@@ -39,6 +42,7 @@ async def main():
         except Exception:
             await session.rollback()
             raise
+
 
 if __name__ == "__main__":
     asyncio.run(main())
