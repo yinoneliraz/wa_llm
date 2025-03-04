@@ -10,6 +10,8 @@ from voyageai.client_async import AsyncClient
 
 from handler.knowledge_base_answers import KnowledgeBaseAnswers
 from models import Message
+from models.jid import parse_jid
+from utils.chat_text import chat2text
 from whatsapp import WhatsAppClient
 from .base_handler import BaseHandler
 
@@ -46,7 +48,7 @@ class Router(BaseHandler):
         route = await self._route(message.text)
         match route:
             case IntentEnum.summarize:
-                await self.summarize(message.chat_jid)
+                await self.summarize(message)
             case IntentEnum.ask_question:
                 await self.ask_knowledge_base(message)
 
@@ -60,26 +62,32 @@ class Router(BaseHandler):
         result = await agent.run(message)
         return result.data.intent
 
-    async def summarize(self, chat_jid: str):
+    async def summarize(self, message: Message):
         time_24_hours_ago = datetime.now() - timedelta(hours=24)
         stmt = (
             select(Message)
-            .where(Message.chat_jid == chat_jid)
+            .where(Message.chat_jid == message.chat_jid)
             .where(Message.timestamp >= time_24_hours_ago)
             .order_by(desc(Message.timestamp))
-            .limit(60)
+            .limit(30)
         )
         res = await self.session.exec(stmt)
         messages: list[Message] = res.all()
 
         agent = Agent(
             model="anthropic:claude-3-5-sonnet-latest",
-            system_prompt="Summarize the following group chat messages in a few words.",
+            system_prompt="""Summarize the following group chat messages in a few words.
+            
+            - Always personalize the summary to user request
+            - Keep it short and conversational
+            - Tag users when mentioning them
+            - Write in the same language as the request
+            """,
             result_type=str,
         )
 
         # TODO: format messages in a way that is easy for the LLM to read
         response = await agent.run(
-            TypeAdapter(list[Message]).dump_json(messages).decode()
+            f"@{parse_jid(message.sender_jid).user}: {message.text}\n\n # History:\n {chat2text(messages)}"
         )
-        await self.send_message(chat_jid, response.data)
+        await self.send_message(message.chat_jid, response.data)
