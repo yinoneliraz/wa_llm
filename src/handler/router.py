@@ -22,13 +22,15 @@ logger = logging.getLogger(__name__)
 class IntentEnum(str, Enum):
     summarize = "summarize"
     ask_question = "ask_question"
+    other = "other"
 
 
 class Intent(BaseModel):
     intent: IntentEnum = Field(
         description="""The intent of the message.
-- summarize: The user wants to summarize the chat messages, or to catch up on the chat messages.
-- ask_question: The user wants to ask a question about the chat messages or learn from the collective knowledge of the group."""
+- summarize: The user wants to summarize the chat messages, or to catch up on the chat messages. This will trigger the summarization of the chat messages.
+- ask_question: The user wants to ask a question or learn from the collective knowledge of the group. This will trigger the knowledge base to answer the question.
+- other: the user wants to do something else. This will trigger the default response."""
     )
 
 
@@ -51,6 +53,8 @@ class Router(BaseHandler):
                 await self.summarize(message)
             case IntentEnum.ask_question:
                 await self.ask_knowledge_base(message)
+            case IntentEnum.other:
+                await self.default_response(message)
 
     async def _route(self, message: str) -> IntentEnum:
         agent = Agent(
@@ -91,3 +95,6 @@ class Router(BaseHandler):
             f"@{parse_jid(message.sender_jid).user}: {message.text}\n\n # History:\n {chat2text(messages)}"
         )
         await self.send_message(message.chat_jid, response.data)
+
+    async def default_response(self, message):
+        await self.send_message(message.chat_jid, "I'm sorry, but I dont think this is something I can help with right now 😅.\n I can help with catching up on the chat messages or answering questions based on the group's knowledge.")
