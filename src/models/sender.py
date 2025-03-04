@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Annotated, List, Optional
+from typing import TYPE_CHECKING, List, Optional
 
 from pydantic import field_validator
 from sqlmodel import Field, Relationship, SQLModel

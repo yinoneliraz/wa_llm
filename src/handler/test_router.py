@@ -5,14 +5,13 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 from pydantic_ai import Agent
 from pydantic_ai.result import RunResult
-
-from handler.router import Router, RouteEnum
-from models import Message
-from whatsapp import SendMessageRequest
-
-from test_utils.mock_session import mock_session  # noqa
-from voyageai.object.embeddings import EmbeddingsObject
 from voyageai.api_resources.response import VoyageResponse
+from voyageai.object.embeddings import EmbeddingsObject
+
+from handler.router import Router, IntentEnum
+from models import Message
+from test_utils.mock_session import mock_session  # noqa
+from whatsapp import SendMessageRequest
 
 
 @pytest.fixture
@@ -59,7 +58,7 @@ async def test_router_ask_question_route(
     mock_session, mock_whatsapp, mock_embedding_client, test_message, monkeypatch
 ):
     # Mock the Agent class
-    mock_agent = MockAgent(RouteEnum.ask_question)
+    mock_agent = MockAgent(IntentEnum.ask_question)
 
     monkeypatch.setattr(Agent, "__init__", lambda *args, **kwargs: None)
     monkeypatch.setattr(Agent, "run", mock_agent.run)
@@ -90,7 +89,7 @@ async def test_router_summarize_route(
     mock_session, mock_whatsapp, mock_embedding_client, test_message, monkeypatch
 ):
     # Mock the Agent class for routing
-    mock_route_agent = MockAgent(RouteEnum.summarize)
+    mock_route_agent = MockAgent(IntentEnum.summarize)
 
     # Mock the Agent class for summarization
     mock_summarize_agent = MockAgent("Summary of messages")
@@ -140,7 +139,7 @@ async def test_router_other_route(
     mock_session, mock_whatsapp, mock_embedding_client, test_message, monkeypatch
 ):
     # Mock the Agent class
-    mock_agent = MockAgent(RouteEnum.other)
+    mock_agent = MockAgent(IntentEnum.other)
     monkeypatch.setattr(Agent, "__init__", lambda *args, **kwargs: None)
     monkeypatch.setattr(Agent, "run", mock_agent.run)
 

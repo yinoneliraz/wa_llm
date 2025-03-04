@@ -2,62 +2,79 @@ import logging
 from datetime import datetime, timedelta
 from enum import Enum
 
-from pydantic import BaseModel, TypeAdapter
+from pydantic import BaseModel, TypeAdapter, Field
 from pydantic_ai import Agent
 from sqlmodel import desc, select
+from sqlmodel.ext.asyncio.session import AsyncSession
+from voyageai.client_async import AsyncClient
 
+from handler.knowledge_base_answers import KnowledgeBaseAnswers
 from models import Message
+from whatsapp import WhatsAppClient
 from .base_handler import BaseHandler
 
 # Creating an object
 logger = logging.getLogger(__name__)
 
 
-class RouteEnum(str, Enum):
-    summarize = "SUMMARIZE"
-    ask_question = "ASK_QUESTION"
-    other = "OTHER"
+class IntentEnum(str, Enum):
+    summarize = "summarize"
+    ask_question = "ask_question"
 
 
-class RouteModel(BaseModel):
-    route: RouteEnum
+class Intent(BaseModel):
+    intent: IntentEnum = Field(
+        description="""The intent of the message.
+- summarize: The user wants to summarize the chat messages, or to catch up on the chat messages.
+- ask_question: The user wants to ask a question about the chat messages or learn from the collective knowledge of the group."""
+    )
 
 
 class Router(BaseHandler):
+    def __init__(
+        self,
+        session: AsyncSession,
+        whatsapp: WhatsAppClient,
+        embedding_client: AsyncClient,
+    ):
+        self.router = Router(session, whatsapp, embedding_client)
+        self.ask_knowledge_base = KnowledgeBaseAnswers(
+            session, whatsapp, embedding_client
+        )
+
     async def __call__(self, message: Message):
         route = await self._route(message.text)
         match route:
-            case RouteEnum.summarize:
+            case IntentEnum.summarize:
                 await self.summarize(message.chat_jid)
-            case RouteEnum.other:
-                logging.warning(
-                    f"OTHER route was chosen Lets see why: {message.text}, {message.chat_jid}"
-                )
+            case IntentEnum.ask_question:
+                await self.ask_knowledge_base(message)
 
-    async def _route(self, message: str) -> RouteEnum:
+    async def _route(self, message: str) -> IntentEnum:
         agent = Agent(
             model="anthropic:claude-3-5-haiku-latest",
-            system_prompt="Extract a routing decision from the input.",
-            result_type=RouteEnum,
+            system_prompt="What is the intent of the message? What does the user want us to help with?",
+            result_type=IntentEnum,
         )
 
         result = await agent.run(message)
         return result.data
 
     async def summarize(self, chat_jid: str):
-        time_24_hours_ago = datetime.utcnow() - timedelta(hours=24)
+        time_24_hours_ago = datetime.now() - timedelta(hours=24)
         stmt = (
             select(Message)
             .where(Message.chat_jid == chat_jid)
             .where(Message.timestamp >= time_24_hours_ago)
             .order_by(desc(Message.timestamp))
+            .limit(60)
         )
         res = await self.session.exec(stmt)
         messages: list[Message] = res.all()
 
         agent = Agent(
             model="anthropic:claude-3-5-sonnet-latest",
-            system_prompt="Summarize the following messages in a few words.",
+            system_prompt="Summarize the following group chat messages in a few words.",
             result_type=str,
         )
 

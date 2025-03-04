@@ -1,9 +1,8 @@
 from datetime import datetime, timezone
-
 from typing import List, Optional
-from sqlmodel import Field, SQLModel, Index, Column, DateTime
+
 from pgvector.sqlalchemy import Vector
-from datetime import datetime
+from sqlmodel import Field, SQLModel, Index, Column, DateTime
 
 
 class KBTopicBase(SQLModel):

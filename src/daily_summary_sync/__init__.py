@@ -1,24 +1,30 @@
 import asyncio
-from datetime import datetime
 import logging
+from datetime import datetime
 
 from pydantic_ai import Agent
 from pydantic_ai.result import RunResult
 from sqlmodel import select, desc
 from sqlmodel.ext.asyncio.session import AsyncSession
+from tenacity import (
+    retry,
+    wait_random_exponential,
+    stop_after_attempt,
+    before_sleep_log,
+)
 
 from models import Group, Message
-from models.jid import parse_jid
+from utils.chat_text import chat2text
 from whatsapp import WhatsAppClient, SendMessageRequest
 
-from tenacity import retry, wait_random_exponential, stop_after_attempt, after_log
-
 logger = logging.getLogger(__name__)
+
 
 @retry(
     wait=wait_random_exponential(min=1, max=30),
     stop=stop_after_attempt(6),
-    after=after_log(logger, logging.ERROR),
+    before_sleep=before_sleep_log(logger, logging.DEBUG),
+    reraise=True,
 )
 async def summarize(group_name: str, messages: list[Message]) -> RunResult[str]:
     agent = Agent(
@@ -35,14 +41,8 @@ async def summarize(group_name: str, messages: list[Message]) -> RunResult[str]:
         result_type=str,
     )
 
-    return await agent.run(
-        "\n".join(
-            [
-                f"{message.timestamp}: @{parse_jid(message.sender_jid).user}: {message.text}"
-                for message in messages
-            ]
-        )
-    )
+    return await agent.run(chat2text(messages))
+
 
 async def sync_group(session, whatsapp: WhatsAppClient, group: Group):
     messages = await session.exec(

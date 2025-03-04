@@ -3,12 +3,17 @@ import logging
 from datetime import datetime
 from typing import Dict, List
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, PrivateAttr
 from pydantic_ai import Agent
 from pydantic_ai.result import RunResult
 from sqlmodel import desc, select
 from sqlmodel.ext.asyncio.session import AsyncSession
-from tenacity import retry, wait_random_exponential, stop_after_attempt, after_log
+from tenacity import (
+    retry,
+    wait_random_exponential,
+    stop_after_attempt,
+    before_sleep_log,
+)
 from voyageai.client_async import AsyncClient
 
 from models import KBTopicCreate, Group, Message
@@ -25,37 +30,31 @@ class Topic(BaseModel):
     summary: str = Field(
         description="A concise summary of the topic discussed. Credit notable insights to the speaker by tagging him (e.g, @user_1)"
     )
-    speakers: List[str] = Field(
-        description="The speakers participated. e.g. [@user_1, @user_7, ...]"
-    )
+    _speaker_map: Dict[str, str] = PrivateAttr()
 
 
-def _swap_numbers_tags_in_messages_to_user_tags(
-    message: str, user_mapping: Dict[str, str]
-) -> str:
+def _deid_text(message: str, user_mapping: Dict[str, str]) -> str:
     for k, v in user_mapping.items():
-        message = message.replace(f"@{k}", "v")
-    return message
-
-
-def _remap_user_mapping_to_tagged_users(
-    message: str, user_mapping: Dict[str, str]
-) -> str:
-    for k, v in user_mapping.items():
-        message = message.replace(k, f"@{v}")
+        message = message.replace(f"@{k}", f"@{v}")
     return message
 
 
 @retry(
-    wait=wait_random_exponential(min=1, max=30),
+    wait=wait_random_exponential(min=5, max=90, multiplier=1.5),
     stop=stop_after_attempt(6),
-    after=after_log(logger, logging.ERROR),
+    before_sleep=before_sleep_log(logger, logging.DEBUG),
+    reraise=True,
 )
 async def conversation_splitter_agent(content: str) -> RunResult[List[Topic]]:
     agent = Agent(
         model="anthropic:claude-3-5-sonnet-latest",
-        system_prompt="""This conversation is a chain of messages that was uninterrupted by a break in the conversation of up to 3 hours.
-Break the conversation into a list of topics.
+        system_prompt="""Attached is a snapshot from a group chat conversation. The conversation is a mix of different topics. Your task is to:
+- Break the conversation into a list of topics, each topic have the same theme of subject.
+- For each topic, write a concise summary of the topic. This will help me to understand the group dynamics and the topics discussed.
+- Don't miss any topic! Every subject discussed should be highlighted in the summary, even if it's a small one. You MUST include ALL topics.
+- You MUST respond in English.
+
+My goal is learn the different subject discussed in the group chat. This will be used as a knowledge base for the group, so it should not loose any important information or insights.
 """,
         result_type=List[Topic],
         retries=5,
@@ -64,38 +63,63 @@ Break the conversation into a list of topics.
     return await agent.run(content)
 
 
-async def get_conversation_topics(messages: list[Message]) -> List[Topic]:
+def _get_speaker_mapping(messages: List[Message]) -> Dict[str, str]:
+    i = 1
     sender_jids = {msg.sender_jid for msg in messages}
-    speaker_mapping = {
-        sender_jid: f"@user_{i+1}" for i, sender_jid in enumerate(sender_jids)
-    }
+    speaker_mapping = {}
+    for sender_jid in sender_jids:
+        speaker_mapping[sender_jid] = f"user_{i}"
+        i += 1
 
-    # Create the reverse mapping: enumerated number -> original username
-    reversed_speaker_mapping = {v: k for k, v in speaker_mapping.items()}
+    for message in messages:
+        # extract all regex @d+ from message.text and add them to speaker_mapping
+        for speaker in message.text.split():
+            if speaker.startswith("@") and speaker[1:].isdigit():
+                if speaker[1:] not in speaker_mapping:
+                    speaker_mapping[speaker[1:]] = f"user_{i}"
+
+    return speaker_mapping
+
+
+def _topic_with_filtered_speakers(
+    topic: Topic, speaker_mapping: Dict[str, str]
+) -> Topic:
+    # find all @user_d+ in topic.summary and topic.subject, then filter them from speaker_mapping
+    speakers = set()
+    for token in topic.summary.split():
+        if token.startswith("@user_") and token[6:].isdigit():
+            speakers.add(token[1:])
+    for token in topic.subject.split():
+        if token.startswith("@user_") and token[6:].isdigit():
+            speakers.add(token[1:])
+
+    topic._speaker_map = {v: k for k, v in speaker_mapping.items() if v in speakers}
+    return topic
+
+
+async def get_conversation_topics(
+    messages: list[Message], my_number: str
+) -> List[Topic]:
+    if len(messages) == 0:
+        return []
+
+    speaker_mapping = _get_speaker_mapping(messages)
+    speaker_mapping[my_number] = "bot"
 
     # Format conversation as "{timestamp}: {participant_enumeration}: {message}"
     # Swap tags in message to user tags E.G. "@972536150150 please comment" to "@user_1 please comment"
     conversation_content = "\n".join(
         [
-            f"{message.timestamp}: {speaker_mapping[message.sender_jid]}: {_swap_numbers_tags_in_messages_to_user_tags(message.text, speaker_mapping)}"
+            f"{message.timestamp}: @{speaker_mapping[message.sender_jid]}: {_deid_text(message.text, speaker_mapping)}"
             for message in messages
             if message.text is not None
         ]
     )
 
     result = await conversation_splitter_agent(conversation_content)
-    for topic in result.data:
-        # If for some reason the speaker is not in the mapping, keep the original speaker
-        # This case was needed when the speaker is not in the mapping because the user was not in the chat
-        remaped_speakers = [
-            reversed_speaker_mapping.get(speaker, speaker) for speaker in topic.speakers
-        ]
-        topic.speakers = remaped_speakers
-        remaped_summary = _remap_user_mapping_to_tagged_users(
-            topic.summary, reversed_speaker_mapping
-        )
-        topic.summary = remaped_summary
-    return result.data
+    return [
+        _topic_with_filtered_speakers(topic, speaker_mapping) for topic in result.data
+    ]
 
 
 async def load_topics(
@@ -105,6 +129,8 @@ async def load_topics(
     topics: List[Topic],
     start_time: datetime,
 ):
+    if len(topics) == 0:
+        return
     documents = [f"# {topic.subject}\n{topic.summary}" for topic in topics]
     topics_embeddings = await voyage_embed_text(embedding_client, documents)
 
@@ -120,9 +146,9 @@ async def load_topics(
             embedding=emb,
             group_jid=group.group_jid,
             start_time=start_time,
-            speakers=",".join(topic.speakers),
-            summary=topic.summary,
-            subject=topic.subject,
+            speakers=",".join(topic._speaker_map.values()),
+            summary=_deid_text(topic.summary, topic._speaker_map),
+            subject=_deid_text(topic.subject, topic._speaker_map),
         )
         for topic, emb in zip(topics, topics_embeddings)
     ]
@@ -143,15 +169,14 @@ class topicsLoader:
         embedding_client: AsyncClient,
         whatsapp: WhatsAppClient,
     ):
+        my_jid = await whatsapp.get_my_jid()
         try:
             # Since yesterday at 12:00 UTC. Between 24 hours to 48 hours ago
             stmt = (
                 select(Message)
                 .where(Message.timestamp >= group.last_ingest)
                 .where(Message.group_jid == group.group_jid)
-                .where(
-                    Message.sender_jid != (await whatsapp.get_my_jid()).normalize_str()
-                )
+                .where(Message.sender_jid != my_jid.normalize_str())
                 .order_by(desc(Message.timestamp))
             )
             res = await db_session.exec(stmt)
@@ -164,7 +189,7 @@ class topicsLoader:
 
             # The result is ordered by timestamp, so the first message is the oldest
             start_time = messages[0].timestamp
-            daily_topics = await get_conversation_topics(messages)
+            daily_topics = await get_conversation_topics(messages, my_jid.user)
             logger.info(
                 f"Loaded {len(daily_topics)} topics for group {group.group_name}"
             )

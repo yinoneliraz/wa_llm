@@ -1,7 +1,6 @@
-from voyageai.client_async import AsyncClient
-
-
 from typing import List
+
+from voyageai.client_async import AsyncClient
 
 
 async def voyage_embed_text(

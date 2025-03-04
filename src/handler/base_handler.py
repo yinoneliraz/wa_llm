@@ -1,4 +1,5 @@
 from sqlmodel.ext.asyncio.session import AsyncSession
+from voyageai.client_async import AsyncClient
 
 from models import (
     WhatsAppWebhookPayload,
@@ -12,7 +13,6 @@ from models import (
 )
 from models.jid import normalize_jid
 from whatsapp import WhatsAppClient, SendMessageRequest
-from voyageai.client_async import AsyncClient
 
 
 class BaseHandler:

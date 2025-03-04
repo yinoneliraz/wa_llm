@@ -30,7 +30,7 @@ async def lifespan(app: FastAPI):
         level=settings.log_level,
     )
 
-    #    logfire.configure()
+    logfire.configure()
 
     app.state.settings = settings
     app.state.whatsapp = WhatsAppClient(

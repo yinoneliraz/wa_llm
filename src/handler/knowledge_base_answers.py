@@ -1,13 +1,20 @@
 import logging
+from typing import List
 
 from pydantic_ai import Agent
 from pydantic_ai.result import RunResult
 from sqlmodel import select, cast, String
-from tenacity import retry, wait_random_exponential, stop_after_attempt, after_log
+from tenacity import (
+    retry,
+    wait_random_exponential,
+    stop_after_attempt,
+    before_sleep_log,
+)
 
 from models import Message, KBTopic
-from utils.voyage_embed_text import voyage_embed_text
 from models.jid import parse_jid
+from utils.chat_text import chat2text
+from utils.voyage_embed_text import voyage_embed_text
 from .base_handler import BaseHandler
 
 # Creating an object
@@ -16,8 +23,18 @@ logger = logging.getLogger(__name__)
 
 class KnowledgeBaseAnswers(BaseHandler):
     async def __call__(self, message: Message):
+        # get the last 7 messages
+        stmt = (
+            select(Message)
+            .where(Message.chat_jid == message.chat_jid)
+            .order_by(Message.timestamp.desc())
+            .limit(7)
+        )
+        res = await self.session.exec(stmt)
+        history: list[Message] = res.all()
+
         rephrased_response = await self.rephrasing_agent(
-            (await self.whatsapp.get_my_jid()).user, message.text
+            (await self.whatsapp.get_my_jid()).user, message, history
         )
         # Get query embedding
         embedded_question = (
@@ -51,7 +68,9 @@ class KnowledgeBaseAnswers(BaseHandler):
             similar_topics.append(f"{result.subject} \n {result.summary}")
 
         sender_number = parse_jid(message.sender_jid).user
-        generation_response = await self.generation_agent(message.text, similar_topics, message.sender_jid)
+        generation_response = await self.generation_agent(
+            message.text, similar_topics, message.sender_jid, history
+        )
         logger.info(
             "RAG Query Results:\n"
             f"Sender: {sender_number}\n"
@@ -70,9 +89,12 @@ class KnowledgeBaseAnswers(BaseHandler):
     @retry(
         wait=wait_random_exponential(min=1, max=30),
         stop=stop_after_attempt(6),
-        after=after_log(logger, logging.ERROR),
+        before_sleep=before_sleep_log(logger, logging.DEBUG),
+        reraise=True,
     )
-    async def generation_agent(self, query: str, topics: list[str], sender: str) -> RunResult[str]:
+    async def generation_agent(
+        self, query: str, topics: list[str], sender: str, history: List[Message]
+    ) -> RunResult[str]:
         agent = Agent(
             model="anthropic:claude-3-5-sonnet-latest",
             system_prompt="""Based on the topics attached, write a response to the query.
@@ -81,12 +103,15 @@ class KnowledgeBaseAnswers(BaseHandler):
             - Only answer from the topics attached, no other text.
             - If the related topics are not relevant or not found, please let the user know.
             - When answering, provide a complete answer to the message - telling the user everything they need to know. BUT not too much! remember - it's a chat.
+            - Attached is the recent chat history. You can use it to understand the context of the query. If the context is not clear or irrelevant to the query, ignore it.
             - Please do tag users while talking about them (e.g., @972536150150). ONLY answer with the new phrased query, no other text.""",
         )
 
         prompt_template = f"""
-        # Query:
         {f'@{sender}'}: {query}
+        
+        # Recent chat history:
+        {chat2text(history)}
         
         # Related Topics:
         {"\n---\n".join(topics) if len(topics) > 0 else "No related topics found."}
@@ -97,17 +122,23 @@ class KnowledgeBaseAnswers(BaseHandler):
     @retry(
         wait=wait_random_exponential(min=1, max=30),
         stop=stop_after_attempt(6),
-        after=after_log(logger, logging.ERROR),
+        before_sleep=before_sleep_log(logger, logging.DEBUG),
+        reraise=True,
     )
-    async def rephrasing_agent(self, my_jid: str, message: str) -> RunResult[str]:
+    async def rephrasing_agent(
+        self, my_jid: str, message: Message, history: List[Message]
+    ) -> RunResult[str]:
         rephrased_agent = Agent(
             model="anthropic:claude-3-5-haiku-latest",
             system_prompt=f"""Phrase the following message as a short paragraph describing a query from the knowledge base.
             - Use English only!
             - Ensure only to include the query itself. The message that includes a lot of information - focus on what the user asks you.
             - Your name is @{my_jid}
+            - Attached is the recent chat history. You can use it to understand the context of the query. If the context is not clear or irrelevant to the query, ignore it.
             - ONLY answer with the new phrased query, no other text!""",
         )
 
         # We obviously need to translate the question and turn the question vebality to a title / summary text to make it closer to the questions in the rag
-        return await rephrased_agent.run(message)
+        return await rephrased_agent.run(
+            f"{message.text}\n\n## Recent chat history:\n {chat2text(history)}"
+        )

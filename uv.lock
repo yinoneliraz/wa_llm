@@ -2887,6 +2887,7 @@ dev = [
     { name = "pytest-asyncio" },
     { name = "pytest-cov" },
     { name = "ruff" },
+    { name = "tqdm" },
     { name = "whatstk" },
 ]
 
@@ -2916,6 +2917,7 @@ dev = [
     { name = "pytest-asyncio", specifier = ">=0.23.5" },
     { name = "pytest-cov", specifier = ">=4.1.0" },
     { name = "ruff", specifier = ">=0.8.6" },
+    { name = "tqdm", specifier = ">=4.67.1" },
     { name = "whatstk", specifier = ">=0.7.1" },
 ]
 
