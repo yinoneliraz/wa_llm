@@ -54,11 +54,11 @@ class Router(BaseHandler):
         agent = Agent(
             model="anthropic:claude-3-5-haiku-latest",
             system_prompt="What is the intent of the message? What does the user want us to help with?",
-            result_type=IntentEnum,
+            result_type=Intent,
         )
 
         result = await agent.run(message)
-        return result.data
+        return result.data.intent
 
     async def summarize(self, chat_jid: str):
         time_24_hours_ago = datetime.now() - timedelta(hours=24)
