@@ -1,4 +1,3 @@
-# TODO: This is a test entrypoint, remove it when we have a proper way to run the daily ingest
 import asyncio
 import logging
 

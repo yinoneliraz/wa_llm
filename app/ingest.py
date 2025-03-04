@@ -1,9 +1,8 @@
-# TODO: This is a test entrypoint, remove it when we have a proper way to run the daily ingest
 import asyncio
 import logging
 
 import logfire
-from sqlalchemy.ext.asyncio import create_async_engine
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 from sqlmodel.ext.asyncio.session import AsyncSession
 from config import Settings
 from daily_ingest.daily_ingest import topicsLoader
@@ -32,9 +31,12 @@ async def main():
     
     # Create async engine using settings
     engine = create_async_engine(settings.db_uri)
+    async_session = async_sessionmaker(
+        engine, expire_on_commit=False, class_=AsyncSession
+    )
     
     # Create session with the async engine
-    async with AsyncSession(engine, expire_on_commit=False) as session:
+    async with async_session() as session:
         topics_loader = topicsLoader()
         await topics_loader.load_topics_for_all_groups(session, embedding_client, whatsapp)
     

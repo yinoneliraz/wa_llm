@@ -10,8 +10,8 @@ from voyageai.client_async import AsyncClient
 
 
 async def get_db_async_session(request: Request) -> AsyncSession:
-    assert request.app.state.db_engine, "Database engine not initialized"
-    async with AsyncSession(request.app.state.db_engine) as session:
+    assert request.app.state.async_session, "AsyncSession generator not initialized"
+    async with request.app.state.async_session() as session:
         try:
             yield session
             await session.commit()
