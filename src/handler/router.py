@@ -37,10 +37,10 @@ class Router(BaseHandler):
         whatsapp: WhatsAppClient,
         embedding_client: AsyncClient,
     ):
-        self.router = Router(session, whatsapp, embedding_client)
         self.ask_knowledge_base = KnowledgeBaseAnswers(
             session, whatsapp, embedding_client
         )
+        super().__init__(session, whatsapp, embedding_client)
 
     async def __call__(self, message: Message):
         route = await self._route(message.text)
