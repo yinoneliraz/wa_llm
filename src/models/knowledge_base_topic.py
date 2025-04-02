@@ -34,8 +34,7 @@ class KBTopic(KBTopicBase, table=True):
         Index(
             "kb_topic_embedding_idx",
             "embedding",
-            postgresql_using="ivfflat",
-            postgresql_with={"lists": 100},
-            postgresql_ops={"embedding": "vector_cosine_ops"},
+            postgresql_using="hnsw",
+            postgresql_ops={"embedding": "vector_l2_ops"},
         ),
     )
