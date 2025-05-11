@@ -4,7 +4,6 @@ from typing import Annotated
 from warnings import warn
 
 from fastapi import Depends, FastAPI
-from sqlmodel import SQLModel, text
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 from sqlmodel.ext.asyncio.session import AsyncSession
 import logging

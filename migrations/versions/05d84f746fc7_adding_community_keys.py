@@ -1,17 +1,15 @@
-import sqlmodel
-
 """Initial schema: sender and group tables, vector extension, and index
 
 Revision ID: 05d84f746fc7
-Revises: 
+Revises:
 Create Date: 2025-02-18 18:37:32.975434
 
 """
+
 from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
-from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision: str = "05d84f746fc7"
@@ -37,10 +35,16 @@ def upgrade() -> None:
         sa.Column("group_jid", sa.String(length=255), primary_key=True),
         sa.Column("group_name", sa.String(length=255), nullable=True),
         sa.Column("group_topic", sa.Text(), nullable=True),
-        sa.Column("owner_jid", sa.String(length=255), sa.ForeignKey("sender.jid"), nullable=True),
-        sa.Column("managed", sa.Boolean(), nullable=False, server_default=sa.text("false")),
+        sa.Column(
+            "owner_jid",
+            sa.String(length=255),
+            sa.ForeignKey("sender.jid"),
+            nullable=True,
+        ),
+        sa.Column(
+            "managed", sa.Boolean(), nullable=False, server_default=sa.text("false")
+        ),
         sa.Column("community_keys", sa.ARRAY(sa.String()), nullable=True),
-        
     )
 
     # Add GIN index for community_keys
@@ -55,7 +59,12 @@ def upgrade() -> None:
     op.create_table(
         "kbtopic",
         sa.Column("id", sa.String(length=255), primary_key=True),
-        sa.Column("group_jid", sa.String(length=255), sa.ForeignKey("group.group_jid"), nullable=True),
+        sa.Column(
+            "group_jid",
+            sa.String(length=255),
+            sa.ForeignKey("group.group_jid"),
+            nullable=True,
+        ),
         sa.Column("start_time", sa.DateTime(timezone=True), nullable=False),
         sa.Column("speakers", sa.Text(), nullable=False),
         sa.Column("subject", sa.Text(), nullable=False),

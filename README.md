@@ -42,6 +42,12 @@ docker-compose up -d
 
 4. Initialize the WhatsApp connection by scanning the QR code through the WhatsApp web interface.
 
+## Developing
+
+* install uv tools `uv sync --all-extras --active`
+* run ruff (Python linter and code formatter) `ruff check` and `ruff format`
+* check for types usage 
+
 ## Architecture
 
 The project consists of several key components:
@@ -66,4 +72,4 @@ The project consists of several key components:
 
 ## License
 
-[Add your license here]
+[LICENCE](CODE_OF_CONDUCT.md)
