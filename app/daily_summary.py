@@ -19,7 +19,8 @@ async def main():
         level=settings.log_level,
     )
     logfire.configure()
-
+    logfire.instrument_pydantic_ai()
+    
     whatsapp = WhatsAppClient(
         settings.whatsapp_host,
         settings.whatsapp_basic_auth_user,
