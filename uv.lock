@@ -1376,6 +1376,12 @@ wheels = [
 fastapi = [
     { name = "opentelemetry-instrumentation-fastapi" },
 ]
+httpx = [
+    { name = "opentelemetry-instrumentation-httpx" },
+]
+sqlalchemy = [
+    { name = "opentelemetry-instrumentation-sqlalchemy" },
+]
 
 [[package]]
 name = "logfire-api"
@@ -1840,6 +1846,38 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/30/01/d159829077f2795c716445df6f8edfdd33391e82d712ba4613fb62b99dc5/opentelemetry_instrumentation_fastapi-0.52b1.tar.gz", hash = "sha256:d26ab15dc49e041301d5c2571605b8f5c3a6ee4a85b60940338f56c120221e98", size = 19247 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/23/89/acef7f625b218523873e32584dc5243d95ffa4facba737fd8b854c049c58/opentelemetry_instrumentation_fastapi-0.52b1-py3-none-any.whl", hash = "sha256:73c8804f053c5eb2fd2c948218bff9561f1ef65e89db326a6ab0b5bf829969f4", size = 12114 },
+]
+
+[[package]]
+name = "opentelemetry-instrumentation-httpx"
+version = "0.52b1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "opentelemetry-api" },
+    { name = "opentelemetry-instrumentation" },
+    { name = "opentelemetry-semantic-conventions" },
+    { name = "opentelemetry-util-http" },
+    { name = "wrapt" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/ab/21/b4afd5f8102a2528f5b131f185229fb349e40fb0542db0903becfb415cf8/opentelemetry_instrumentation_httpx-0.52b1.tar.gz", hash = "sha256:b32252f21fff7f1bd88cc42716dcf948b3f9e8fc689d3d5d479222491f443c8d", size = 17700 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e3/35/ea781c0040ee4ff4badfd8404abec53717a0cdeea037b4dc23edbaf07a1a/opentelemetry_instrumentation_httpx-0.52b1-py3-none-any.whl", hash = "sha256:8476c3133dc28c7192e17f0f7a28170d2410b125551b7c450dd76eb7192cb89f", size = 14108 },
+]
+
+[[package]]
+name = "opentelemetry-instrumentation-sqlalchemy"
+version = "0.52b1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "opentelemetry-api" },
+    { name = "opentelemetry-instrumentation" },
+    { name = "opentelemetry-semantic-conventions" },
+    { name = "packaging" },
+    { name = "wrapt" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/7f/e0/c64dd0780dd4c4f1eb0f8fc079181d1bfa18e5bb0e3e9ecb3a1de24d0be1/opentelemetry_instrumentation_sqlalchemy-0.52b1.tar.gz", hash = "sha256:6b9255e111eabb7fb0f007333dd1c5012a1df7bcc34dde22c841064826a8a9d9", size = 14584 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/bf/d1/dbcfe7ff77e42209de566fa1cda71b78834bc4ffc7908c97ed3b73cc0899/opentelemetry_instrumentation_sqlalchemy-0.52b1-py3-none-any.whl", hash = "sha256:63228df88472109e43c65de2cb1969dcf97768bbee69cda63dfeb396ff0887d6", size = 14135 },
 ]
 
 [[package]]
@@ -3094,7 +3132,7 @@ dependencies = [
     { name = "asyncpg" },
     { name = "fastapi" },
     { name = "httpx" },
-    { name = "logfire", extra = ["fastapi"] },
+    { name = "logfire", extra = ["fastapi", "httpx", "sqlalchemy"] },
     { name = "pgvector" },
     { name = "pydantic" },
     { name = "pydantic-ai", extra = ["logfire"] },
@@ -3126,7 +3164,7 @@ requires-dist = [
     { name = "asyncpg", specifier = ">=0.30.0" },
     { name = "fastapi", specifier = ">=0.115.6" },
     { name = "httpx", specifier = ">=0.28.1" },
-    { name = "logfire", extras = ["fastapi"], specifier = ">=3.12.0" },
+    { name = "logfire", extras = ["fastapi", "httpx", "sqlalchemy"], specifier = ">=3.12.0" },
     { name = "pgvector", specifier = ">=0.3.6" },
     { name = "pydantic", specifier = ">=2.6.1" },
     { name = "pydantic-ai", extras = ["logfire"], specifier = ">=0.0.50" },

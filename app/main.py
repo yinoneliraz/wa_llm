@@ -50,6 +50,7 @@ async def lifespan(app: FastAPI):
         pool_recycle=600,
         future=True,
     )
+    logfire.instrument_sqlalchemy(engine)
     async_session = async_sessionmaker(
         engine, expire_on_commit=False, class_=AsyncSession
     )
@@ -73,6 +74,7 @@ app = FastAPI(title="Webhook API", lifespan=lifespan)
 logfire.configure()
 logfire.instrument_pydantic_ai()
 logfire.instrument_fastapi(app)
+logfire.instrument_httpx(capture_all=True)
 
 @app.post("/webhook")
 async def webhook(
