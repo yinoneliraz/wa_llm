@@ -104,7 +104,7 @@ class Router(BaseHandler):
     async def about(self, message):
         await self.send_message(
             message.chat_jid,
-            """Hi! I'm an bot based on an open sourc project that was originally created for the llm.org.il community.
+            """Hi! I'm a bot based on an open source project that was originally created for the llm.org.il community.
             I can help you catch up on the chat messages and answer questions based on the group's knowledge.
             Check out the project on github: https://github.com/ilanbenb/wa_llm
             """,
