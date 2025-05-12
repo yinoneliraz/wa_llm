@@ -20,7 +20,6 @@ async def main():
     )
     logfire.configure()
     logfire.instrument_pydantic_ai()
-    logfire.instrument_httpx(capture_all=True)
     
     whatsapp = WhatsAppClient(
         settings.whatsapp_host,
@@ -30,7 +29,6 @@ async def main():
 
     # Create engine with pooling configuration
     engine = create_async_engine(settings.db_uri)
-    logfire.instrument_sqlalchemy(engine)
     async_session = async_sessionmaker(
         engine, expire_on_commit=False, class_=AsyncSession
     )
