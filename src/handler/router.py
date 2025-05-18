@@ -106,7 +106,7 @@ class Router(BaseHandler):
             message.chat_jid,
             """I'm an open-source bot created for the GenAI Israel community - https://llm.org.il
             I can help you catch up on the chat messages and answer questions based on the group's knowledge.
-            Pleas send me PRs and Star me at https://github.com/ilanbenb/wa_llm
+            Please send me PRs and star me at https://github.com/ilanbenb/wa_llm ⭐️
             """,
             message.message_id,
         )
