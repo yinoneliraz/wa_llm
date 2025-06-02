@@ -1,3 +1,5 @@
+import logging
+
 from sqlmodel.ext.asyncio.session import AsyncSession
 from voyageai.client_async import AsyncClient
 
@@ -8,6 +10,7 @@ from models import (
 from whatsapp import WhatsAppClient
 from .base_handler import BaseHandler
 
+logger = logging.getLogger(__name__)
 
 class MessageHandler(BaseHandler):
     def __init__(
@@ -24,6 +27,9 @@ class MessageHandler(BaseHandler):
         # ignore messages that don't exist or don't have text
         if not message or not message.text:
             return
+        
+        if message.sender_jid.endswith("@lid"):
+            logging.info(f"Received message from {message.sender_jid}: {payload.model_dump_json()}")
 
         # ignore messages from unmanaged groups
         if message and message.group and not message.group.managed:
