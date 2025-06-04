@@ -58,26 +58,36 @@ async def sync_group(session, whatsapp: WhatsAppClient, group: Group):
         logging.info("Not enough messages to summarize in group %s", group.group_name)
         return
 
-    response = await summarize(group.group_name or "group", messages)
+    try:
+        response = await summarize(group.group_name or "group", messages)
+    except Exception as e:
+        logging.error("Error summarizing group %s: %s", group.group_name, e)
+        return
 
-    await whatsapp.send_message(
-        SendMessageRequest(phone=group.group_jid, message=response.data)
-    )
-
-    community_groups = await group.get_related_community_groups(session)
-    for cg in community_groups:
+    try:
         await whatsapp.send_message(
-            SendMessageRequest(phone=cg.group_jid, message=response.data)
+            SendMessageRequest(phone=group.group_jid, message=response.data)
         )
 
-    # Update the group with the new last_summary_sync
-    group.last_summary_sync = datetime.now()
-    session.add(group)
-    await session.commit()
+        # Send the summary to the community groups
+        community_groups = await group.get_related_community_groups(session)
+        for cg in community_groups:
+            await whatsapp.send_message(
+                SendMessageRequest(phone=cg.group_jid, message=response.data)
+            )
+
+    except Exception as e:
+        logging.error("Error sending message to group %s: %s", group.group_name, e)
+
+    finally:
+        # Update the group with the new last_summary_sync
+        group.last_summary_sync = datetime.now()
+        session.add(group)
+        await session.commit()
 
 
 async def daily_summary_sync(session: AsyncSession, whatsapp: WhatsAppClient):
-    groups = await session.exec(select(Group).where(Group.managed == True))
+    groups = await session.exec(select(Group).where(Group.managed == True)) # noqa: E712 https://stackoverflow.com/a/18998106
     tasks = [sync_group(session, whatsapp, group) for group in list(groups.all())]
     errs = await asyncio.gather(*tasks, return_exceptions=True)
     for e in errs:
