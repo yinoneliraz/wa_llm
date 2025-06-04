@@ -46,7 +46,7 @@ docker-compose up -d
 
 * install uv tools `uv sync --all-extras --active`
 * run ruff (Python linter and code formatter) `ruff check` and `ruff format`
-* check for types usage 
+* check for types usage `pyright`
 
 ## Architecture
 

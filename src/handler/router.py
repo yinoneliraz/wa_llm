@@ -99,7 +99,11 @@ class Router(BaseHandler):
         response = await agent.run(
             f"@{parse_jid(message.sender_jid).user}: {message.text}\n\n # History:\n {chat2text(messages)}"
         )
-        await self.send_message(message.chat_jid, response.data, message.message_id,)
+        await self.send_message(
+            message.chat_jid,
+            response.data,
+            message.message_id,
+        )
 
     async def about(self, message):
         await self.send_message(
