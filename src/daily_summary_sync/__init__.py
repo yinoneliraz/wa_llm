@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 )
 async def summarize(group_name: str, messages: list[Message]) -> AgentRunResult[str]:
     agent = Agent(
-        model="anthropic:claude-3-7-sonnet-latest",
+        model="anthropic:claude-4-sonnet-20250514",
         system_prompt=f""""
         Write a quick summary of what happened in the chat group since the last summary.
         
