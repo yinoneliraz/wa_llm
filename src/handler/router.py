@@ -92,10 +92,9 @@ class Router(BaseHandler):
             - Tag users when mentioning them
             - You MUST respond with the same language as the request
             """,
-            result_type=str,
+            output_type=str,
         )
 
-        # TODO: format messages in a way that is easy for the LLM to read
         response = await agent.run(
             f"@{parse_jid(message.sender_jid).user}: {message.text}\n\n # History:\n {chat2text(messages)}"
         )
