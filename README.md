@@ -42,6 +42,8 @@ docker-compose up -d
 
 4. Initialize the WhatsApp connection by scanning the QR code through the WhatsApp web interface.
 
+5. Restart web-server service to get the groups from the number 
+
 ## Developing
 
 * install uv tools `uv sync --all-extras --active`
