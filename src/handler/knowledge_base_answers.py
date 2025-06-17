@@ -3,7 +3,7 @@ from typing import List
 
 from pydantic_ai import Agent
 from pydantic_ai.agent import AgentRunResult
-from sqlmodel import select, cast, String
+from sqlmodel import select, cast, String, desc
 from tenacity import (
     retry,
     wait_random_exponential,
@@ -27,7 +27,7 @@ class KnowledgeBaseAnswers(BaseHandler):
         stmt = (
             select(Message)
             .where(Message.chat_jid == message.chat_jid)
-            .order_by(Message.timestamp.desc())
+            .order_by(desc(Message.timestamp))
             .limit(7)
         )
         res = await self.session.exec(stmt)
@@ -38,7 +38,7 @@ class KnowledgeBaseAnswers(BaseHandler):
         )
         # Get query embedding
         embedded_question = (
-            await voyage_embed_text(self.embedding_client, [rephrased_response.data])
+            await voyage_embed_text(self.embedding_client, [rephrased_response.output])
         )[0]
 
         select_from = None
