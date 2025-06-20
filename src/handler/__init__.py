@@ -31,7 +31,7 @@ class MessageHandler(BaseHandler):
         message = await self.store_message(payload)
 
         if message and message.group and message.group.managed and message.group.forward_url:
-            await self.forward_message(message)
+            await self.forward_message(payload, message.group.forward_url)
 
         # ignore messages that don't exist or don't have text
         if not message or not message.text:
@@ -56,35 +56,22 @@ class MessageHandler(BaseHandler):
 
 
 
-    async def forward_message(self, message: Message) -> None:
+    async def forward_message(self,payload: WhatsAppWebhookPayload, forward_url: str) -> None:
             """
             Forward a message to the group's configured forward URL using HTTP POST.
             
             :param message: The message to forward
             """
             # Ensure we have a group with a forward URL
-            if not message.group or not message.group.forward_url:
+            if not forward_url:
                 return
-            
-            # Prepare the message data to forward
-            forward_data = {
-                "message_id": message.message_id,
-                "text": message.text,
-                "sender_jid": message.sender_jid,
-                "sender_name": message.sender.push_name if message.sender else None,
-                "group_jid": message.group_jid,
-                "group_name": message.group.group_name,
-                "timestamp": message.timestamp.isoformat(),
-                "reply_to_id": message.reply_to_id,
-                "media_url": message.media_url,
-            }
             
             try:
                 # Create an async HTTP client and forward the message
                 async with httpx.AsyncClient(timeout=30.0) as client:
                     response = await client.post(
-                        message.group.forward_url,
-                        json=forward_data,
+                        forward_url,
+                        json=payload,
                         headers={"Content-Type": "application/json"}
                     )
                     response.raise_for_status()
