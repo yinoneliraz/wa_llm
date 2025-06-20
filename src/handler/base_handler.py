@@ -1,3 +1,4 @@
+import logging
 from sqlmodel.ext.asyncio.session import AsyncSession
 from voyageai.client_async import AsyncClient
 
@@ -14,6 +15,7 @@ from models import (
 from whatsapp.jid import normalize_jid
 from whatsapp import WhatsAppClient, SendMessageRequest
 
+logger = logging.getLogger(__name__)
 
 class BaseHandler:
     def __init__(

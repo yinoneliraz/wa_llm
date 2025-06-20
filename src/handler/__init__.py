@@ -1,4 +1,5 @@
 import logging
+import httpx
 
 from sqlmodel.ext.asyncio.session import AsyncSession
 from voyageai.client_async import AsyncClient
@@ -8,6 +9,7 @@ from handler.whatsapp_group_link_spam import WhatsappGroupLinkSpamHandler
 from models import (
     WhatsAppWebhookPayload,
 )
+from models.message import Message
 from whatsapp import WhatsAppClient
 from .base_handler import BaseHandler
 
@@ -27,6 +29,10 @@ class MessageHandler(BaseHandler):
 
     async def __call__(self, payload: WhatsAppWebhookPayload):
         message = await self.store_message(payload)
+
+        if message and message.group and message.group.managed and message.group.forward_url:
+            await self.forward_message(message)
+
         # ignore messages that don't exist or don't have text
         if not message or not message.text:
             return
@@ -47,3 +53,49 @@ class MessageHandler(BaseHandler):
         if message.group and message.group.managed and message.group.notify_on_spam and "https://chat.whatsapp.com/" in message.text:
             await self.whatsapp_group_link_spam(message)
 
+
+
+
+    async def forward_message(self, message: Message) -> None:
+            """
+            Forward a message to the group's configured forward URL using HTTP POST.
+            
+            :param message: The message to forward
+            """
+            # Ensure we have a group with a forward URL
+            if not message.group or not message.group.forward_url:
+                return
+            
+            # Prepare the message data to forward
+            forward_data = {
+                "message_id": message.message_id,
+                "text": message.text,
+                "sender_jid": message.sender_jid,
+                "sender_name": message.sender.push_name if message.sender else None,
+                "group_jid": message.group_jid,
+                "group_name": message.group.group_name,
+                "timestamp": message.timestamp.isoformat(),
+                "reply_to_id": message.reply_to_id,
+                "media_url": message.media_url,
+            }
+            
+            try:
+                # Create an async HTTP client and forward the message
+                async with httpx.AsyncClient(timeout=30.0) as client:
+                    response = await client.post(
+                        message.group.forward_url,
+                        json=forward_data,
+                        headers={"Content-Type": "application/json"}
+                    )
+                    response.raise_for_status()
+                    
+            except httpx.HTTPError as exc:
+                # Log the error but don't raise it to avoid breaking message processing
+                logger.error(
+                    f"Failed to forward message {message.message_id} to {message.group.forward_url}: {exc}"
+                )
+            except Exception as exc:
+                # Catch any other unexpected errors
+                logger.error(
+                    f"Unexpected error forwarding message {message.message_id}: {exc}"
+                )
