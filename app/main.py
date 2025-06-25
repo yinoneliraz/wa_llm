@@ -1,19 +1,16 @@
 import asyncio
 from contextlib import asynccontextmanager
-from typing import Annotated
 from warnings import warn
 
-from fastapi import Depends, FastAPI
+from fastapi import FastAPI
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 from sqlmodel.ext.asyncio.session import AsyncSession
 import logging
 import logfire
 
-from api import status
+from api import status, webhook
 import models  # noqa
 from config import Settings
-from api.deps import get_handler
-from handler import MessageHandler
 from whatsapp import WhatsAppClient
 from whatsapp.init_groups import gather_groups
 from voyageai.client_async import AsyncClient
@@ -78,17 +75,7 @@ logfire.instrument_httpx(capture_all=True)
 logfire.instrument_system_metrics()
 
 
-@app.post("/webhook")
-async def webhook(
-    payload: models.WhatsAppWebhookPayload,
-    handler: Annotated[MessageHandler, Depends(get_handler)],
-) -> str:
-    if payload.from_:
-        await handler(payload)
-
-    return "ok"
-
-
+app.include_router(webhook.router)
 app.include_router(status.router)
 
 if __name__ == "__main__":
