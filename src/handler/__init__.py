@@ -11,6 +11,7 @@ from models import (
 )
 from whatsapp import WhatsAppClient
 from .base_handler import BaseHandler
+from .family_integration import FamilyIntegration
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +27,7 @@ class MessageHandler(BaseHandler):
         self.whatsapp_group_link_spam = WhatsappGroupLinkSpamHandler(
             session, whatsapp, embedding_client
         )
+        self.family_integration = FamilyIntegration(session, whatsapp, embedding_client)
         super().__init__(session, whatsapp, embedding_client)
 
     async def __call__(self, payload: WhatsAppWebhookPayload):
@@ -63,6 +65,12 @@ class MessageHandler(BaseHandler):
             and "https://chat.whatsapp.com/" in message.text
         ):
             await self.whatsapp_group_link_spam(message)
+
+        # Add family integration (before existing router)
+        if message and message.text:
+            if await self.family_integration.should_handle_family_command(message):
+                await self.family_integration.handle_family_message(message)
+                return
 
     async def forward_message(
         self, payload: WhatsAppWebhookPayload, forward_url: str

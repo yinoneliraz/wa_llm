@@ -17,4 +17,8 @@ __all__ = [
     "bulk_upsert",
     "KBTopic",
     "KBTopicCreate",
+    "GroceryList",
+    "GroceryItem", 
+    "Reminder",
+    "ChildScheduleEntry",
 ]
