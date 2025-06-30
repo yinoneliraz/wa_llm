@@ -4,6 +4,15 @@ from sqlalchemy import pool
 
 from alembic import context
 from sqlalchemy.ext.asyncio import async_engine_from_config
+
+# Add src to Python path for imports
+import sys
+from pathlib import Path
+current_dir = Path(__file__).parent.parent
+src_dir = current_dir / "src"
+if str(src_dir) not in sys.path:
+    sys.path.insert(0, str(src_dir))
+
 from models import *  # noqa
 from sqlmodel import SQLModel
 from config import Settings
