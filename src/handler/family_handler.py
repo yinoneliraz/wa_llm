@@ -110,8 +110,11 @@ class FamilyHandler(BaseHandler):
         reminder_keywords = [
             # English
             "remind", "reminder", "remember", "schedule", "due", "appointment",
-            # Hebrew
-            "תזכורת", "תזכיר", "זכור", "לוח זמנים", "מועד", "פגישה", "זמן"
+            # Hebrew - creating reminders
+            "תזכורת", "תזכיר", "זכור", "לוח זמנים", "מועד", "פגישה", "זמן",
+            # Hebrew - managing reminders  
+            "סיימתי", "עשיתי", "השלמתי", "מחק תזכורת", "תמחק", "הסר תזכורת",
+            "תנקה תזכורות", "נקה תזכורות", "מחק תזכורות"
         ]
         text_lower = text.lower()
         return any(keyword in text_lower for keyword in reminder_keywords)
@@ -203,20 +206,45 @@ class FamilyHandler(BaseHandler):
             - show: showing current reminders (הצגת תזכורות)
             - complete: marking reminder as done (סימון כהושלם)
             - delete: removing a reminder (מחיקת תזכורת)
+            - clear: clearing completed reminders (ניקוי תזכורות מושלמות)
             
             Parse relative times in Hebrew and English:
-            Hebrew: "בעוד 30 דקות", "מחר ב3 אחה"צ", "השבוע הבא", "כל יום", "יומי"
-            English: "in 30 minutes", "tomorrow at 3pm", "next week", "daily", "every day"
+            Hebrew: "בעוד 30 דקות", "בעוד שתי דקות", "מחר ב3 אחה״צ", "השבוע הבא", "כל יום", "יומי"
+            English: "in 30 minutes", "in two minutes", "tomorrow at 3pm", "next week", "daily", "every day"
             
-            Hebrew Examples:
-            "תזכיר לי להתקשר לרופא מחר ב3 אחה"צ" -> action: add, message: "התקשר לרופא", due_time: "מחר 3 אחה"צ"
+            Hebrew Examples for ADD:
+            "תזכיר לי להתקשר לרופא ב5 אחה״צ" -> action: add, message: "התקשר לרופא", due_time: "ב5 אחה״צ"
             "תזכיר לי לקחת ויטמינים כל יום" -> action: add, message: "קחת ויטמינים", recurring: "יומי"
+            "תזכיר לי לקנות חלב בעוד שתי דקות" -> action: add, message: "קנות חלב", due_time: "בעוד שתי דקות"
+            "תזכיר לי לקרוא לאמא מחר בבוקר" -> action: add, message: "קרוא לאמא", due_time: "מחר בבוקר"
+            
+            Hebrew Examples for SHOW:
             "תראה את התזכורות שלי" -> action: show
+            "מה התזכורות שלי" -> action: show
+            "הצג תזכורות" -> action: show
+            
+            Hebrew Examples for COMPLETE:
+            "סיימתי להתקשר לרופא" -> action: complete, message: "התקשר לרופא"
+            "עשיתי קניות" -> action: complete, message: "קניות"
+            "השלמתי לקחת ויטמינים" -> action: complete, message: "לקחת ויטמינים"
+            
+            Hebrew Examples for DELETE:
+            "מחק תזכורת להתקשר לרופא" -> action: delete, message: "התקשר לרופא"
+            "תמחק את התזכורת לקניות" -> action: delete, message: "קניות"
+            "הסר תזכורת לויטמינים" -> action: delete, message: "ויטמינים"
+            
+            Hebrew Examples for CLEAR:
+            "תנקה תזכורות שהושלמו" -> action: clear
+            "מחק תזכורות מושלמות" -> action: clear
+            "נקה תזכורות ישנות" -> action: clear
             
             English Examples:
-            "remind me to call doctor at 3pm tomorrow" -> action: add, message: "call doctor", due_time: "tomorrow 3pm"
+            "remind me to call doctor at 5pm" -> action: add, message: "call doctor", due_time: "5pm"
             "remind me to take vitamins daily" -> action: add, message: "take vitamins", recurring: "daily"
             "show my reminders" -> action: show
+            "completed calling doctor" -> action: complete, message: "calling doctor"
+            "delete reminder about groceries" -> action: delete, message: "groceries"
+            "clear completed reminders" -> action: clear
             """,
             output_type=ReminderCommand,
         )
@@ -291,8 +319,11 @@ class FamilyHandler(BaseHandler):
     async def _handle_reminder(self, message: Message):
         """Handle reminder commands"""
         try:
+            logger.info(f"Processing reminder command: '{message.text}'")
             parsed = await self._parse_reminder_command(message.text)
             command = parsed.data
+            
+            logger.info(f"Parsed reminder command - Action: {command.action}, Message: {command.message}, Due time: {command.due_time}, Recurring: {command.recurring}")
 
             if command.action == "add":
                 await self._add_reminder(message, command)
@@ -302,12 +333,14 @@ class FamilyHandler(BaseHandler):
                 await self._complete_reminder(message, command.message)
             elif command.action == "delete":
                 await self._delete_reminder(message, command.message)
+            elif command.action == "clear":
+                await self._clear_completed_reminders(message)
 
         except Exception as e:
             logger.error(f"Error handling reminder command: {e}")
             await self.send_message(
                 message.chat_jid,
-                "לא הצלחתי להבין את התזכורת הזאת. נסה 'תזכיר לי להתקשר לרופא מחר ב3 אחה\"צ'",
+                "לא הצלחתי להבין את פקודת התזכורת. נסה:\n• 'תזכיר לי לעשות משהו ב5 אחה״צ' - ליצירה\n• 'תראה את התזכורות שלי' - להצגה\n• 'סיימתי [משימה]' - לסימון כהושלם\n• 'מחק תזכורת [משימה]' - למחיקה",
                 message.message_id,
             )
 
@@ -556,15 +589,24 @@ class FamilyHandler(BaseHandler):
 • "תנקה פריטים שנרכשו" - ניקוי פריטים מושלמים
 
 **תזכורות:**
-• "תזכיר לי להתקשר לרופא מחר ב3 אחה״צ"
-• "תזכיר לי לקחת ויטמינים כל יום"
-• "תראה את התזכורות שלי"
+• "תזכיר לי להתקשר לרופא ב5 אחה״צ" - יצירת תזכורת
+• "תזכיר לי לקנות חלב בעוד שתי דקות" - תזכורת מיידית
+• "תזכיר לי לקחת ויטמינים כל יום" - תזכורת חוזרת
+• "תראה את התזכורות שלי" - הצגת תזכורות
+• "סיימתי להתקשר לרופא" - סימון כהושלם
+• "מחק תזכורת לקניות" - מחיקת תזכורת
+• "תנקה תזכורות שהושלמו" - ניקוי תזכורות ישנות
 
 **לוח זמנים ילדים:**
 • "התינוק אכל ב2 אחה״צ"
 • "הפעוט התחיל לישון"
 • "תראה לוח זמנים של התינוק"
 • "התינוק עשה את הצעדים הראשונים!" (אבני דרך)
+
+**זמנים נתמכים בתזכורות:**
+• "ב5 אחה״צ", "מחר ב9 בבוקר"
+• "בעוד שתי דקות", "בעוד שעה"
+• "בערב", "בלילה", "מחרתיים"
 
 פשוט דבר בטבעיות - אני אבין! 😊
         """
@@ -614,27 +656,101 @@ class FamilyHandler(BaseHandler):
             )
 
     async def _show_reminders(self, message: Message):
-        """Show current active reminders"""
-        stmt = select(Reminder).where(
+        """Show current active reminders with improved formatting"""
+        now = datetime.now(timezone.utc)
+        
+        # Get active (upcoming) reminders
+        stmt_active = select(Reminder).where(
             and_(
                 Reminder.group_jid == message.group_jid,
                 Reminder.completed == False,
-                Reminder.due_time > datetime.now(timezone.utc)
+                Reminder.due_time > now
             )
         ).order_by(Reminder.due_time)
         
-        result = await self.session.exec(stmt)
-        reminders = result.all()
+        # Get overdue reminders
+        stmt_overdue = select(Reminder).where(
+            and_(
+                Reminder.group_jid == message.group_jid,
+                Reminder.completed == False,
+                Reminder.due_time <= now,
+                Reminder.sent == False  # Not sent yet
+            )
+        ).order_by(Reminder.due_time)
         
-        if not reminders:
+        result_active = await self.session.exec(stmt_active)
+        result_overdue = await self.session.exec(stmt_overdue)
+        
+        active_reminders = result_active.all()
+        overdue_reminders = result_overdue.all()
+        
+        if not active_reminders and not overdue_reminders:
             response = "📅 אין תזכורות פעילות"
         else:
             response = "📅 **התזכורות שלך:**\n\n"
-            for i, reminder in enumerate(reminders, 1):
-                time_str = reminder.due_time.strftime("%d/%m %H:%M")
-                recurring_str = f" (חוזר {reminder.recurring_pattern})" if reminder.recurring_pattern else ""
-                response += f"{i}. {reminder.message}\n   ⏰ {time_str}{recurring_str}\n\n"
+            
+            # Show overdue reminders first
+            if overdue_reminders:
+                response += "🔴 **תזכורות שפג תוקפן:**\n"
+                for i, reminder in enumerate(overdue_reminders, 1):
+                    time_str = reminder.due_time.strftime("%d/%m %H:%M")
+                    time_diff = now - reminder.due_time
+                    if time_diff.total_seconds() < 3600:  # Less than 1 hour
+                        overdue_str = f"לפני {int(time_diff.total_seconds() / 60)} דקות"
+                    elif time_diff.total_seconds() < 86400:  # Less than 1 day
+                        overdue_str = f"לפני {int(time_diff.total_seconds() / 3600)} שעות"
+                    else:
+                        overdue_str = f"לפני {time_diff.days} ימים"
+                    
+                    recurring_str = f" (חוזר {reminder.recurring_pattern})" if reminder.recurring_pattern else ""
+                    response += f"{i}. {reminder.message}\n   ⏰ {time_str} ({overdue_str}){recurring_str}\n\n"
+            
+            # Show upcoming reminders
+            if active_reminders:
+                response += "🟢 **תזכורות עתידיות:**\n"
+                for i, reminder in enumerate(active_reminders, 1):
+                    time_str = reminder.due_time.strftime("%d/%m %H:%M")
+                    
+                    # Calculate time until reminder
+                    time_diff = reminder.due_time - now
+                    if time_diff.total_seconds() < 3600:  # Less than 1 hour
+                        until_str = f"בעוד {int(time_diff.total_seconds() / 60)} דקות"
+                    elif time_diff.total_seconds() < 86400:  # Less than 1 day
+                        until_str = f"בעוד {int(time_diff.total_seconds() / 3600)} שעות"
+                    else:
+                        until_str = f"בעוד {time_diff.days} ימים"
+                    
+                    recurring_str = f" (חוזר {reminder.recurring_pattern})" if reminder.recurring_pattern else ""
+                    response += f"{i}. {reminder.message}\n   ⏰ {time_str} ({until_str}){recurring_str}\n\n"
+            
+            # Add management instructions
+            response += "💡 **ניהול תזכורות:**\n"
+            response += "• 'סיימתי [תיאור התזכורת]' - לסימון כהושלם\n"
+            response += "• 'מחק תזכורת [תיאור]' - למחיקת תזכורת\n"
+            response += "• 'תנקה תזכורות שהושלמו' - לניקוי כל התזכורות שהושלמו"
         
+        await self.send_message(message.chat_jid, response, message.message_id)
+
+    async def _clear_completed_reminders(self, message: Message):
+        """Clear all completed reminders"""
+        stmt = select(Reminder).where(
+            and_(
+                Reminder.group_jid == message.group_jid,
+                Reminder.completed == True
+            )
+        )
+        result = await self.session.exec(stmt)
+        completed_reminders = result.all()
+
+        if completed_reminders:
+            for reminder in completed_reminders:
+                await self.session.delete(reminder)
+            
+            await self.session.commit()
+            response = f"🧹 נוקו {len(completed_reminders)} תזכורות שהושלמו"
+        else:
+            response = "אין תזכורות מושלמות לניקוי"
+
         await self.send_message(message.chat_jid, response, message.message_id)
 
     async def _complete_reminder(self, message: Message, reminder_text: str):
@@ -694,20 +810,34 @@ class FamilyHandler(BaseHandler):
         
         logger.info(f"Parsing Hebrew time: '{time_str}' -> '{text}'")
         
-        # Handle relative times
+        # Handle relative times - these should return immediately
         if "בעוד" in text:
+            logger.info(f"Processing relative time: {text}")
             # "בעוד שעה", "בעוד 30 דקות", "בעוד יומיים"
             if "דקות" in text or "דקה" in text:
                 minutes = self._extract_number(text)
-                return now + timedelta(minutes=minutes or 30)
+                logger.info(f"Extracted minutes: {minutes}")
+                result_time = now + timedelta(minutes=minutes or 30)
+                logger.info(f"Relative time result: {result_time}")
+                return result_time
             elif "שעות" in text or "שעה" in text:
                 hours = self._extract_number(text)
-                return now + timedelta(hours=hours or 1)
+                logger.info(f"Extracted hours: {hours}")
+                result_time = now + timedelta(hours=hours or 1)
+                logger.info(f"Relative time result: {result_time}")
+                return result_time
             elif "ימים" in text or "יום" in text:
                 days = self._extract_number(text)
-                return now + timedelta(days=days or 1)
+                logger.info(f"Extracted days: {days}")
+                result_time = now + timedelta(days=days or 1)
+                logger.info(f"Relative time result: {result_time}")
+                return result_time
+            else:
+                # General "בעוד" without specific unit - default to 1 hour
+                logger.info("General 'בעוד' - defaulting to 1 hour")
+                return now + timedelta(hours=1)
         
-        # Handle specific times
+        # Handle specific times (only if not relative)
         target_time = now
         
         # Handle day references
@@ -777,26 +907,38 @@ class FamilyHandler(BaseHandler):
         """Extract number from Hebrew text"""
         import re
         
-        # Hebrew number words
+        # Hebrew number words (including feminine forms)
         hebrew_numbers = {
-            "אחת": 1, "שתיים": 2, "שלוש": 3, "ארבע": 4, "חמש": 5,
+            # Masculine forms
+            "אחד": 1, "שניים": 2, "שלושה": 3, "ארבעה": 4, "חמישה": 5,
+            "שישה": 6, "שבעה": 7, "שמונה": 8, "תשעה": 9, "עשרה": 10,
+            # Feminine forms (used with feminine nouns like דקות, שעות)
+            "אחת": 1, "שתי": 2, "שתיים": 2, "שלוש": 3, "ארבע": 4, "חמש": 5,
             "שש": 6, "שבע": 7, "שמונה": 8, "תשע": 9, "עשר": 10,
+            # Combined numbers
             "אחד עשר": 11, "שתים עשרה": 12, "שלוש עשרה": 13,
             "ארבע עשרה": 14, "חמש עשרה": 15, "שש עשרה": 16,
             "שבע עשרה": 17, "שמונה עשרה": 18, "תשע עשרה": 19,
-            "עשרים": 20, "שלושים": 30
+            "עשרים": 20, "שלושים": 30, "ארבעים": 40, "חמישים": 50
         }
         
-        # Try Hebrew number words first
-        for hebrew_num, value in hebrew_numbers.items():
+        logger.info(f"Extracting number from: '{text}'")
+        
+        # Try Hebrew number words first (longer phrases first)
+        sorted_hebrew = sorted(hebrew_numbers.items(), key=lambda x: len(x[0]), reverse=True)
+        for hebrew_num, value in sorted_hebrew:
             if hebrew_num in text:
+                logger.info(f"Found Hebrew number: '{hebrew_num}' = {value}")
                 return value
         
         # Try to extract digits
         numbers = re.findall(r'\d+', text)
         if numbers:
-            return int(numbers[0])
+            number = int(numbers[0])
+            logger.info(f"Found digit: {number}")
+            return number
         
+        logger.warning(f"No number found in: '{text}'")
         return None
 
     async def _log_schedule_entry(self, message: Message, command: ScheduleCommand):
