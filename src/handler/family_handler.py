@@ -95,10 +95,12 @@ class FamilyHandler(BaseHandler):
         """Check if message is grocery-related in Hebrew or English"""
         grocery_keywords = [
             # English
-            "grocery", "groceries", "shopping", "list", "buy", "store", "got ", "picked up",
+            "grocery", "groceries", "shopping", "list", "buy", "store", "got ", "picked up", "remove",
             # Hebrew
             "קניות", "רשימה", "רשימת קניות", "קנה", "קניתי", "לקחתי", "חנות", "סופר", 
-            "תוסיף", "הוסף", "צריך", "קנייה"
+            "תוסיף", "הוסף", "צריך", "קנייה", "רכשתי", "הבאתי",
+            # Hebrew removal words
+            "תוריד", "תסיר", "תמחק", "תוציא", "הוצא", "הסר", "הורד"
         ]
         text_lower = text.lower()
         return any(keyword in text_lower for keyword in grocery_keywords)
@@ -140,23 +142,45 @@ class FamilyHandler(BaseHandler):
             
             Actions:
             - add: adding items to the grocery list (הוספה לרשימה)
-            - complete/got: marking items as completed/purchased (סימון כרכישה)
+            - complete: marking items as completed/purchased (סימון כרכישה)
+            - remove: explicitly removing items from list (הסרת פריטים)
             - show: showing the current list (הצגת רשימה)
             - clear: clearing completed items (מחיקת פריטים שנרכשו)
-            - remove: removing items from list (הסרת פריטים)
             
-            Hebrew Examples:
-            "תוסיף חלב ולחם לרשימת קניות" -> action: add, items: ["חלב", "לחם"]
+            Hebrew Examples for COMPLETE action (marking as purchased):
             "קניתי את החלב" -> action: complete, items: ["חלב"]
-            "תראה רשימת קניות" -> action: show, items: []
+            "קניתי לחם" -> action: complete, items: ["לחם"]
+            "לקחתי את התפוחים" -> action: complete, items: ["תפוחים"]
+            "רכשתי חלב ולחם" -> action: complete, items: ["חלב", "לחם"]
+            "הבאתי את החלב" -> action: complete, items: ["חלב"]
+            
+            Hebrew Examples for REMOVE action (removing from list):
+            "תוריד את הלחם מרשימת הקניות" -> action: remove, items: ["לחם"]
+            "תסיר את החלב מהרשימה" -> action: remove, items: ["חלב"]
+            "תמחק את התפוחים" -> action: remove, items: ["תפוחים"]
+            "תוציא את הלחם מהרשימה" -> action: remove, items: ["לחם"]
+            
+            Hebrew Examples for ADD action:
+            "תוסיף חלב ולחם לרשימה" -> action: add, items: ["חלב", "לחם"]
             "צריך 2 בקבוקי חלב ו3 תפוחים" -> action: add, items: ["חלב", "תפוחים"], quantities: ["2 בקבוקים", "3"]
-            "לקחתי את הלחם" -> action: complete, items: ["לחם"]
+            
+            Hebrew Examples for SHOW action:
+            "תראה רשימת קניות" -> action: show, items: []
+            "מה ברשימה" -> action: show, items: []
             
             English Examples:
-            "add milk and bread to grocery list" -> action: add, items: ["milk", "bread"]
             "got the milk" -> action: complete, items: ["milk"]
+            "bought bread" -> action: complete, items: ["bread"]
+            "remove milk from list" -> action: remove, items: ["milk"]
+            "add milk and bread to grocery list" -> action: add, items: ["milk", "bread"]
             "show grocery list" -> action: show, items: []
-            "need 2 bottles of milk and 3 apples" -> action: add, items: ["milk", "apples"], quantities: ["2 bottles", "3"]
+            
+            IMPORTANT: 
+            - "קניתי" = complete (purchased)
+            - "לקחתי" = complete (took/got)
+            - "רכשתי" = complete (acquired)
+            - "תוריד/תסיר/תמחק/תוציא" = remove (explicit removal)
+            - Extract the actual item names without "את ה" prefixes
             """,
             output_type=GroceryCommand,
         )
@@ -239,25 +263,28 @@ class FamilyHandler(BaseHandler):
     async def _handle_grocery(self, message: Message):
         """Handle grocery list commands"""
         try:
+            logger.info(f"Processing grocery command: '{message.text}'")
             parsed = await self._parse_grocery_command(message.text)
             command = parsed.data
+            
+            logger.info(f"Parsed command - Action: {command.action}, Items: {command.items}, Quantities: {command.quantities}")
 
             if command.action == "add":
                 await self._add_grocery_items(message, command.items, command.quantities)
             elif command.action in ["complete", "got"]:
                 await self._complete_grocery_items(message, command.items)
+            elif command.action == "remove":
+                await self._remove_grocery_items(message, command.items)
             elif command.action == "show":
                 await self._show_grocery_list(message)
             elif command.action == "clear":
                 await self._clear_completed_items(message)
-            elif command.action == "remove":
-                await self._remove_grocery_items(message, command.items)
 
         except Exception as e:
             logger.error(f"Error handling grocery command: {e}")
             await self.send_message(
                 message.chat_jid,
-                "לא הצלחתי להבין את הפקודה הזאת. נסה 'תוסיף חלב לרשימה' או 'קניתי לחם'",
+                "לא הצלחתי להבין את הפקודה הזאת. נסה:\n• 'תוסיף חלב לרשימה' - להוספה\n• 'קניתי לחם' - לסימון כרכישה\n• 'תוריד את החלב מרשימת הקניות' - להסרה\n• 'תראה רשימת קניות' - להצגה",
                 message.message_id,
             )
 
@@ -325,11 +352,23 @@ class FamilyHandler(BaseHandler):
         for i, item in enumerate(items):
             quantity = quantities[i] if i < len(quantities) else None
             
+            # Clean the item name
+            clean_item = item.strip()
+            for prefix in ["את ה", "את", "ה"]:
+                if clean_item.startswith(prefix):
+                    clean_item = clean_item[len(prefix):].strip()
+            
+            logger.info(f"Adding item: '{item}' -> cleaned: '{clean_item}' with quantity: {quantity}")
+            
             # Check if item already exists
             stmt = select(GroceryItem).where(
                 and_(
                     GroceryItem.list_id == grocery_list.id,
-                    GroceryItem.item_name.ilike(f"%{item}%"),
+                    or_(
+                        GroceryItem.item_name.ilike(f"%{clean_item}%"),
+                        GroceryItem.item_name == clean_item,
+                        GroceryItem.item_name == item
+                    ),
                     GroceryItem.completed == False
                 )
             )
@@ -337,16 +376,20 @@ class FamilyHandler(BaseHandler):
             existing_item = result.first()
 
             if existing_item:
+                logger.info(f"Item '{clean_item}' already exists in list")
                 continue  # Skip if already exists
 
+            # Use the cleaned item name for storage
+            final_item_name = clean_item if clean_item else item
             new_item = GroceryItem(
                 list_id=grocery_list.id,
-                item_name=item,
+                item_name=final_item_name,
                 quantity=quantity,
                 added_by=message.sender_jid,
             )
             self.session.add(new_item)
-            added_items.append(f"{quantity + ' ' if quantity else ''}{item}")
+            added_items.append(f"{quantity + ' ' if quantity else ''}{final_item_name}")
+            logger.info(f"Added new item: {final_item_name}")
 
         await self.session.commit()
 
@@ -357,26 +400,112 @@ class FamilyHandler(BaseHandler):
 
         await self.send_message(message.chat_jid, response, message.message_id)
 
+    async def _remove_grocery_items(self, message: Message, items: List[str]):
+        """Remove items from grocery list (not mark as completed, but delete entirely)"""
+        removed_items = []
+        
+        for item in items:
+            # Clean the item name - remove common Hebrew prefixes
+            clean_item = item.strip()
+            for prefix in ["את ה", "את", "ה"]:
+                if clean_item.startswith(prefix):
+                    clean_item = clean_item[len(prefix):].strip()
+            
+            logger.info(f"Looking for item to remove: '{item}' -> cleaned: '{clean_item}'")
+            
+            # Try multiple matching strategies
+            stmt = select(GroceryItem).join(GroceryList).where(
+                and_(
+                    GroceryList.group_jid == message.group_jid,
+                    GroceryItem.completed == False,  # Only remove non-completed items
+                    or_(
+                        GroceryItem.item_name.ilike(f"%{clean_item}%"),
+                        GroceryItem.item_name.ilike(f"%{item}%"),
+                        GroceryItem.item_name == clean_item,
+                        GroceryItem.item_name == item
+                    )
+                )
+            ).limit(1)  # Only get the first match
+            
+            result = await self.session.exec(stmt)
+            grocery_item = result.first()
+
+            if grocery_item:
+                logger.info(f"Found item to remove: {grocery_item.item_name}")
+                removed_items.append(grocery_item.item_name)
+                await self.session.delete(grocery_item)
+            else:
+                logger.warning(f"Could not find item '{item}' (cleaned: '{clean_item}') to remove")
+
+        await self.session.commit()
+
+        if removed_items:
+            response = f"🗑️ הוסר מהרשימה:\n" + "\n".join(f"• {item}" for item in removed_items)
+        else:
+            response = "לא מצאתי את הפריטים האלה ברשימת הקניות."
+
+        await self.send_message(message.chat_jid, response, message.message_id)
+
+    async def _clear_completed_items(self, message: Message):
+        """Clear all completed items from the grocery list"""
+        stmt = select(GroceryItem).join(GroceryList).where(
+            and_(
+                GroceryList.group_jid == message.group_jid,
+                GroceryItem.completed == True
+            )
+        )
+        result = await self.session.exec(stmt)
+        completed_items = result.all()
+
+        if completed_items:
+            for item in completed_items:
+                await self.session.delete(item)
+            
+            await self.session.commit()
+            response = f"🧹 נוקו {len(completed_items)} פריטים שנרכשו מהרשימה"
+        else:
+            response = "אין פריטים שנרכשו לניקוי"
+
+        await self.send_message(message.chat_jid, response, message.message_id)
+
     async def _complete_grocery_items(self, message: Message, items: List[str]):
         """Mark grocery items as completed"""
         completed_items = []
         
         for item in items:
+            # Clean the item name - remove common Hebrew prefixes
+            clean_item = item.strip()
+            for prefix in ["את ה", "את", "ה"]:
+                if clean_item.startswith(prefix):
+                    clean_item = clean_item[len(prefix):].strip()
+            
+            logger.info(f"Looking for item to complete: '{item}' -> cleaned: '{clean_item}'")
+            
+            # Try multiple matching strategies
             stmt = select(GroceryItem).join(GroceryList).where(
                 and_(
                     GroceryList.group_jid == message.group_jid,
-                    GroceryItem.item_name.ilike(f"%{item}%"),
-                    GroceryItem.completed == False
+                    GroceryItem.completed == False,
+                    or_(
+                        GroceryItem.item_name.ilike(f"%{clean_item}%"),
+                        GroceryItem.item_name.ilike(f"%{item}%"),
+                        GroceryItem.item_name == clean_item,
+                        GroceryItem.item_name == item
+                    )
                 )
-            )
+            ).limit(1)  # Only get the first match
+            
             result = await self.session.exec(stmt)
             grocery_item = result.first()
 
             if grocery_item:
+                logger.info(f"Found item to complete: {grocery_item.item_name}")
                 grocery_item.completed = True
                 grocery_item.completed_by = message.sender_jid
                 grocery_item.completed_at = datetime.now(timezone.utc)
                 completed_items.append(grocery_item.item_name)
+            else:
+                logger.warning(f"Could not find item '{item}' (cleaned: '{clean_item}') to complete")
 
         await self.session.commit()
 
@@ -420,9 +549,11 @@ class FamilyHandler(BaseHandler):
 👨‍👩‍👧‍👦 **עזרה בוט משפחתי**
 
 **רשימות קניות:**
-• "תוסיף חלב ולחם לרשימה"
-• "קניתי את החלב" או "לקחתי לחם"
-• "תראה רשימת קניות"
+• "תוסיף חלב ולחם לרשימה" - הוספת פריטים
+• "קניתי את החלב" או "לקחתי לחם" - סימון כרכישה
+• "תוריד את החלב מרשימת הקניות" - הסרת פריטים
+• "תראה רשימת קניות" - הצגת הרשימה
+• "תנקה פריטים שנרכשו" - ניקוי פריטים מושלמים
 
 **תזכורות:**
 • "תזכיר לי להתקשר לרופא מחר ב3 אחה״צ"
