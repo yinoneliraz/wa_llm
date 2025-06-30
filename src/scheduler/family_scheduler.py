@@ -1,138 +1,289 @@
-from datetime import datetime, timezone
-from typing import Optional, List, TYPE_CHECKING
-from uuid import uuid4
+"""
+Family Scheduler Module
 
-from sqlmodel import Field, Relationship, SQLModel, Column, DateTime, Index
+Handles periodic tasks for family functionality:
+- Send due reminders
+- Process recurring reminders
+- Generate daily summaries for child schedules
+- Clean up old completed tasks
 
-if TYPE_CHECKING:
-    from .group import Group
-    from .sender import Sender
+Usage:
+- Run as a background task in your main application
+- Or as a separate cron job using a script like app/family_scheduler.py
+"""
+
+import asyncio
+import logging
+from datetime import datetime, timezone, timedelta
+from typing import List
+
+from sqlmodel import select, and_, or_
+from sqlmodel.ext.asyncio.session import AsyncSession
+
+from models.family import Reminder, ChildScheduleEntry, GroceryItem
+from whatsapp import WhatsAppClient, SendMessageRequest
+
+logger = logging.getLogger(__name__)
 
 
-class GroceryList(SQLModel, table=True):
-    """Represents a grocery shopping list for a family group"""
-    id: str = Field(primary_key=True, default_factory=lambda: str(uuid4()))
-    group_jid: str = Field(max_length=255, foreign_key="group.group_jid")
-    name: str = Field(default="Shopping List", max_length=255)
-    created_at: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc),
-        sa_column=Column(DateTime(timezone=True), nullable=False),
-    )
-    updated_at: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc),
-        sa_column=Column(DateTime(timezone=True), nullable=False),
-    )
+class FamilyScheduler:
+    """Scheduler for family-related periodic tasks"""
     
-    # Relationships
-    items: List["GroceryItem"] = Relationship(back_populates="grocery_list")
-    group: Optional["Group"] = Relationship()
-
-    __table_args__ = (
-        Index("idx_grocery_list_group", "group_jid"),
-    )
-
-
-class GroceryItem(SQLModel, table=True):
-    """Individual items in a grocery list"""
-    id: str = Field(primary_key=True, default_factory=lambda: str(uuid4()))
-    list_id: str = Field(foreign_key="grocerylist.id")
-    item_name: str = Field(max_length=255)
-    quantity: Optional[str] = Field(default=None, max_length=50)
-    added_by: str = Field(max_length=255, foreign_key="sender.jid")
-    completed: bool = Field(default=False)
-    completed_by: Optional[str] = Field(
-        max_length=255, foreign_key="sender.jid", nullable=True
-    )
-    created_at: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc),
-        sa_column=Column(DateTime(timezone=True), nullable=False),
-    )
-    completed_at: Optional[datetime] = Field(
-        default=None,
-        sa_column=Column(DateTime(timezone=True), nullable=True),
-    )
+    def __init__(self, session: AsyncSession, whatsapp: WhatsAppClient):
+        self.session = session
+        self.whatsapp = whatsapp
     
-    # Relationships
-    grocery_list: Optional[GroceryList] = Relationship(back_populates="items")
-    added_by_sender: Optional["Sender"] = Relationship(
-        sa_relationship_kwargs={
-            "foreign_keys": "[GroceryItem.added_by]",
-            "primaryjoin": "GroceryItem.added_by == Sender.jid",
-        }
-    )
-    completed_by_sender: Optional["Sender"] = Relationship(
-        sa_relationship_kwargs={
-            "foreign_keys": "[GroceryItem.completed_by]",
-            "primaryjoin": "GroceryItem.completed_by == Sender.jid",
-        }
-    )
-
-    __table_args__ = (
-        Index("idx_grocery_item_list", "list_id"),
-        Index("idx_grocery_item_completed", "completed"),
-    )
-
-
-class Reminder(SQLModel, table=True):
-    """Reminders for family members"""
-    id: str = Field(primary_key=True, default_factory=lambda: str(uuid4()))
-    group_jid: str = Field(max_length=255, foreign_key="group.group_jid")
-    created_by: str = Field(max_length=255, foreign_key="sender.jid")
-    message: str = Field(max_length=1000)
-    due_time: datetime = Field(
-        sa_column=Column(DateTime(timezone=True), nullable=False)
-    )
-    recurring_pattern: Optional[str] = Field(
-        default=None, max_length=50
-    )  # "daily", "weekly", "monthly", "yearly"
-    recurring_interval: Optional[int] = Field(default=None)  # every N days/weeks/etc
-    completed: bool = Field(default=False)
-    sent: bool = Field(default=False)  # Track if reminder was sent
-    created_at: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc),
-        sa_column=Column(DateTime(timezone=True), nullable=False),
-    )
-    completed_at: Optional[datetime] = Field(
-        default=None,
-        sa_column=Column(DateTime(timezone=True), nullable=True),
-    )
+    async def run_periodic_tasks(self):
+        """Run all periodic tasks"""
+        try:
+            logger.info("Running family scheduler tasks")
+            
+            # Send due reminders
+            await self._send_due_reminders()
+            
+            # Process recurring reminders
+            await self._process_recurring_reminders()
+            
+            # Clean up old completed items (optional)
+            # await self._cleanup_old_completed_items()
+            
+            logger.info("Family scheduler tasks completed")
+            
+        except Exception as e:
+            logger.error(f"Error in family scheduler: {e}")
     
-    # Relationships
-    group: Optional["Group"] = Relationship()
-    creator: Optional["Sender"] = Relationship()
-
-    __table_args__ = (
-        Index("idx_reminder_group", "group_jid"),
-        Index("idx_reminder_due_time", "due_time"),
-        Index("idx_reminder_completed", "completed"),
-        Index("idx_reminder_sent", "sent"),
-    )
-
-
-class ChildScheduleEntry(SQLModel, table=True):
-    """Schedule entries for children (feeding, naps, etc.)"""
-    id: str = Field(primary_key=True, default_factory=lambda: str(uuid4()))
-    group_jid: str = Field(max_length=255, foreign_key="group.group_jid")
-    child_name: str = Field(max_length=100)  # "toddler", "baby", or actual name
-    activity_type: str = Field(max_length=50)  # "feeding", "nap", "diaper", "milestone"
-    notes: Optional[str] = Field(default=None, max_length=500)
-    recorded_by: str = Field(max_length=255, foreign_key="sender.jid")
-    activity_time: datetime = Field(
-        sa_column=Column(DateTime(timezone=True), nullable=False)
-    )
-    duration_minutes: Optional[int] = Field(default=None)  # For naps, feeding duration
-    created_at: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc),
-        sa_column=Column(DateTime(timezone=True), nullable=False),
-    )
+    async def _send_due_reminders(self):
+        """Send reminders that are due"""
+        now = datetime.now(timezone.utc)
+        
+        # Find due reminders that haven't been sent
+        stmt = select(Reminder).where(
+            and_(
+                Reminder.due_time <= now,
+                Reminder.sent == False,
+                Reminder.completed == False
+            )
+        )
+        
+        result = await self.session.exec(stmt)
+        due_reminders = result.all()
+        
+        for reminder in due_reminders:
+            try:
+                # Create a nice Hebrew reminder message
+                user_phone = reminder.created_by.split('@')[0]  # Extract phone number
+                message = f"🔔 **תזכורת עבור @{user_phone}:**\n{reminder.message}"
+                
+                await self.whatsapp.send_message(
+                    SendMessageRequest(
+                        phone=reminder.group_jid,
+                        message=message
+                    )
+                )
+                
+                # Mark as sent
+                reminder.sent = True
+                self.session.add(reminder)
+                
+                logger.info(f"Sent reminder: {reminder.message} to {reminder.group_jid}")
+                
+            except Exception as e:
+                logger.error(f"Failed to send reminder {reminder.id}: {e}")
+        
+        await self.session.commit()
     
-    # Relationships
-    group: Optional["Group"] = Relationship()
-    recorder: Optional["Sender"] = Relationship()
+    async def _process_recurring_reminders(self):
+        """Create new instances of recurring reminders"""
+        now = datetime.now(timezone.utc)
+        
+        # Find completed recurring reminders that need new instances
+        stmt = select(Reminder).where(
+            and_(
+                Reminder.recurring_pattern.isnot(None),
+                Reminder.completed == True,
+                Reminder.due_time <= now
+            )
+        )
+        
+        result = await self.session.exec(stmt)
+        recurring_reminders = result.all()
+        
+        for reminder in recurring_reminders:
+            try:
+                next_due_time = self._calculate_next_due_time(
+                    reminder.due_time, 
+                    reminder.recurring_pattern,
+                    reminder.recurring_interval or 1
+                )
+                
+                if next_due_time and next_due_time > now:
+                    # Create new reminder instance
+                    new_reminder = Reminder(
+                        group_jid=reminder.group_jid,
+                        created_by=reminder.created_by,
+                        message=reminder.message,
+                        due_time=next_due_time,
+                        recurring_pattern=reminder.recurring_pattern,
+                        recurring_interval=reminder.recurring_interval,
+                        completed=False,
+                        sent=False
+                    )
+                    
+                    self.session.add(new_reminder)
+                    logger.info(f"Created new recurring reminder: {reminder.message}")
+                
+            except Exception as e:
+                logger.error(f"Failed to process recurring reminder {reminder.id}: {e}")
+        
+        await self.session.commit()
+    
+    def _calculate_next_due_time(
+        self, 
+        last_due_time: datetime, 
+        pattern: str, 
+        interval: int = 1
+    ) -> datetime:
+        """Calculate the next due time for a recurring reminder"""
+        if pattern == "daily":
+            return last_due_time + timedelta(days=interval)
+        elif pattern == "weekly":
+            return last_due_time + timedelta(weeks=interval)
+        elif pattern == "monthly":
+            # Approximate monthly (30 days)
+            return last_due_time + timedelta(days=30 * interval)
+        elif pattern == "yearly":
+            return last_due_time + timedelta(days=365 * interval)
+        else:
+            logger.warning(f"Unknown recurring pattern: {pattern}")
+            return None
+    
+    async def _cleanup_old_completed_items(self, days_old: int = 30):
+        """Clean up old completed grocery items and reminders"""
+        cutoff_date = datetime.now(timezone.utc) - timedelta(days=days_old)
+        
+        # Clean up old completed grocery items
+        stmt = select(GroceryItem).where(
+            and_(
+                GroceryItem.completed == True,
+                GroceryItem.completed_at < cutoff_date
+            )
+        )
+        result = await self.session.exec(stmt)
+        old_items = result.all()
+        
+        for item in old_items:
+            await self.session.delete(item)
+        
+        logger.info(f"Cleaned up {len(old_items)} old grocery items")
+        
+        # Clean up old completed non-recurring reminders
+        stmt = select(Reminder).where(
+            and_(
+                Reminder.completed == True,
+                Reminder.completed_at < cutoff_date,
+                Reminder.recurring_pattern.is_(None)
+            )
+        )
+        result = await self.session.exec(stmt)
+        old_reminders = result.all()
+        
+        for reminder in old_reminders:
+            await self.session.delete(reminder)
+        
+        logger.info(f"Cleaned up {len(old_reminders)} old reminders")
+        
+        await self.session.commit()
+    
+    async def generate_daily_child_summary(self, group_jid: str, child_name: str) -> str:
+        """Generate a daily summary for a child's activities"""
+        today = datetime.now(timezone.utc).date()
+        start_of_day = datetime.combine(today, datetime.min.time()).replace(tzinfo=timezone.utc)
+        end_of_day = start_of_day + timedelta(days=1)
+        
+        stmt = select(ChildScheduleEntry).where(
+            and_(
+                ChildScheduleEntry.group_jid == group_jid,
+                ChildScheduleEntry.child_name.ilike(f"%{child_name}%"),
+                ChildScheduleEntry.activity_time >= start_of_day,
+                ChildScheduleEntry.activity_time < end_of_day
+            )
+        ).order_by(ChildScheduleEntry.activity_time)
+        
+        result = await self.session.exec(stmt)
+        activities = result.all()
+        
+        if not activities:
+            return f"לא נרשמו פעילויות עבור {child_name} היום."
+        
+        summary = f"📊 **סיכום יום של {child_name.title()}**\n\n"
+        
+        # Group by activity type
+        activity_groups = {}
+        for activity in activities:
+            activity_type = activity.activity_type
+            if activity_type not in activity_groups:
+                activity_groups[activity_type] = []
+            activity_groups[activity_type].append(activity)
+        
+        for activity_type, group_activities in activity_groups.items():
+            summary += f"**{activity_type.title()}s:**\n"
+            for activity in group_activities:
+                time_str = activity.activity_time.strftime("%I:%M %p")
+                duration_str = f" ({activity.duration_minutes}min)" if activity.duration_minutes else ""
+                notes_str = f" - {activity.notes}" if activity.notes else ""
+                summary += f"• {time_str}{duration_str}{notes_str}\n"
+            summary += "\n"
+        
+        return summary.strip()
 
-    __table_args__ = (
-        Index("idx_schedule_group", "group_jid"),
-        Index("idx_schedule_child", "child_name"),
-        Index("idx_schedule_activity", "activity_type"),
-        Index("idx_schedule_time", "activity_time"),
+
+# Example script file for running as cron job:
+"""
+# app/family_scheduler.py
+
+import asyncio
+import logging
+
+import logfire
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
+from sqlmodel.ext.asyncio.session import AsyncSession
+
+from config import Settings
+from scheduler.family_scheduler import FamilyScheduler
+from whatsapp import WhatsAppClient
+
+
+async def main():
+    settings = Settings()
+
+    logging.basicConfig(
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+        level=settings.log_level,
     )
+    logfire.configure()
+
+    whatsapp = WhatsAppClient(
+        settings.whatsapp_host,
+        settings.whatsapp_basic_auth_user,
+        settings.whatsapp_basic_auth_password,
+    )
+
+    engine = create_async_engine(settings.db_uri)
+    async_session = async_sessionmaker(
+        engine, expire_on_commit=False, class_=AsyncSession
+    )
+
+    async with async_session() as session:
+        try:
+            scheduler = FamilyScheduler(session, whatsapp)
+            await scheduler.run_periodic_tasks()
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
+"""

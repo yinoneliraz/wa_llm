@@ -570,30 +570,234 @@ class FamilyHandler(BaseHandler):
         """
         await self.send_message(message.chat_jid, help_text, message.message_id)
 
-    # Placeholder methods for reminder and schedule functionality
+    # Reminder functionality - now implemented!
     async def _add_reminder(self, message: Message, command: ReminderCommand):
-        # TODO: Implement reminder creation with time parsing
-        await self.send_message(
-            message.chat_jid,
-            "פונקציונליות תזכורות בקרוב! 🔔",
-            message.message_id,
-        )
+        """Create a new reminder with time parsing"""
+        try:
+            # Parse the due time
+            due_time = await self._parse_hebrew_time(command.due_time, command.recurring)
+            
+            if not due_time:
+                await self.send_message(
+                    message.chat_jid,
+                    "לא הצלחתי להבין את הזמן. נסה: 'ב5 אחה״צ', 'מחר ב9 בבוקר', או 'בעוד שעתיים'",
+                    message.message_id,
+                )
+                return
+            
+            # Create reminder
+            reminder = Reminder(
+                group_jid=message.group_jid,
+                created_by=message.sender_jid,
+                message=command.message,
+                due_time=due_time,
+                recurring_pattern=command.recurring,
+                recurring_interval=1 if command.recurring else None,
+            )
+            
+            self.session.add(reminder)
+            await self.session.commit()
+            
+            # Format response
+            time_str = due_time.strftime("%d/%m/%Y %H:%M")
+            recurring_str = f" (חוזר {command.recurring})" if command.recurring else ""
+            
+            response = f"✅ תזכורת נוצרה:\n📝 {command.message}\n⏰ {time_str}{recurring_str}"
+            await self.send_message(message.chat_jid, response, message.message_id)
+            
+        except Exception as e:
+            logger.error(f"Error creating reminder: {e}")
+            await self.send_message(
+                message.chat_jid,
+                "הייתה בעיה ביצירת התזכורת. אנא נסה שוב.",
+                message.message_id,
+            )
 
     async def _show_reminders(self, message: Message):
-        # TODO: Implement reminder display
-        await self.send_message(
-            message.chat_jid,
-            "הצגת תזכורות בקרוב! 📅",
-            message.message_id,
-        )
+        """Show current active reminders"""
+        stmt = select(Reminder).where(
+            and_(
+                Reminder.group_jid == message.group_jid,
+                Reminder.completed == False,
+                Reminder.due_time > datetime.now(timezone.utc)
+            )
+        ).order_by(Reminder.due_time)
+        
+        result = await self.session.exec(stmt)
+        reminders = result.all()
+        
+        if not reminders:
+            response = "📅 אין תזכורות פעילות"
+        else:
+            response = "📅 **התזכורות שלך:**\n\n"
+            for i, reminder in enumerate(reminders, 1):
+                time_str = reminder.due_time.strftime("%d/%m %H:%M")
+                recurring_str = f" (חוזר {reminder.recurring_pattern})" if reminder.recurring_pattern else ""
+                response += f"{i}. {reminder.message}\n   ⏰ {time_str}{recurring_str}\n\n"
+        
+        await self.send_message(message.chat_jid, response, message.message_id)
 
     async def _complete_reminder(self, message: Message, reminder_text: str):
-        # TODO: Implement reminder completion
-        pass
+        """Mark a reminder as completed"""
+        stmt = select(Reminder).where(
+            and_(
+                Reminder.group_jid == message.group_jid,
+                Reminder.completed == False,
+                Reminder.message.ilike(f"%{reminder_text}%")
+            )
+        ).limit(1)
+        
+        result = await self.session.exec(stmt)
+        reminder = result.first()
+        
+        if reminder:
+            reminder.completed = True
+            reminder.completed_at = datetime.now(timezone.utc)
+            await self.session.commit()
+            
+            response = f"✅ התזכורת הושלמה: {reminder.message}"
+        else:
+            response = "לא מצאתי תזכורת כזאת"
+        
+        await self.send_message(message.chat_jid, response, message.message_id)
 
     async def _delete_reminder(self, message: Message, reminder_text: str):
-        # TODO: Implement reminder deletion
-        pass
+        """Delete a reminder"""
+        stmt = select(Reminder).where(
+            and_(
+                Reminder.group_jid == message.group_jid,
+                Reminder.completed == False,
+                Reminder.message.ilike(f"%{reminder_text}%")
+            )
+        ).limit(1)
+        
+        result = await self.session.exec(stmt)
+        reminder = result.first()
+        
+        if reminder:
+            await self.session.delete(reminder)
+            await self.session.commit()
+            
+            response = f"🗑️ התזכורת נמחקה: {reminder.message}"
+        else:
+            response = "לא מצאתי תזכורת כזאת למחיקה"
+        
+        await self.send_message(message.chat_jid, response, message.message_id)
+
+    async def _parse_hebrew_time(self, time_str: str, recurring: str = None) -> datetime:
+        """Parse Hebrew time expressions into datetime objects"""
+        if not time_str:
+            return None
+        
+        now = datetime.now(timezone.utc)
+        text = time_str.lower().strip()
+        
+        logger.info(f"Parsing Hebrew time: '{time_str}' -> '{text}'")
+        
+        # Handle relative times
+        if "בעוד" in text:
+            # "בעוד שעה", "בעוד 30 דקות", "בעוד יומיים"
+            if "דקות" in text or "דקה" in text:
+                minutes = self._extract_number(text)
+                return now + timedelta(minutes=minutes or 30)
+            elif "שעות" in text or "שעה" in text:
+                hours = self._extract_number(text)
+                return now + timedelta(hours=hours or 1)
+            elif "ימים" in text or "יום" in text:
+                days = self._extract_number(text)
+                return now + timedelta(days=days or 1)
+        
+        # Handle specific times
+        target_time = now
+        
+        # Handle day references
+        if "מחר" in text:
+            target_time = now + timedelta(days=1)
+        elif "מחרתיים" in text:
+            target_time = now + timedelta(days=2)
+        elif "השבוע הבא" in text:
+            target_time = now + timedelta(days=7)
+        
+        # Extract hour from Hebrew time
+        hour = None
+        minute = 0
+        
+        # Look for patterns like "ב5 אחה״צ", "ב9 בבוקר", "ב15:30"
+        if "אחה״צ" in text or "אחהצ" in text:
+            # Afternoon - add 12 to hour if needed
+            hour = self._extract_number(text)
+            if hour and hour < 12:
+                hour += 12
+        elif "בבוקר" in text:
+            # Morning
+            hour = self._extract_number(text)
+        elif "בערב" in text:
+            # Evening - assume PM
+            hour = self._extract_number(text)
+            if hour and hour < 12:
+                hour += 12
+        elif "בלילה" in text:
+            # Night
+            hour = self._extract_number(text)
+            if hour and hour < 6:  # 0-5 AM is night, 6-11 is morning
+                target_time = target_time + timedelta(days=1)
+        else:
+            # Try to extract just the hour
+            hour = self._extract_number(text)
+        
+        # Look for minute specification (like 15:30)
+        if ":" in text:
+            time_parts = text.split(":")
+            if len(time_parts) >= 2:
+                try:
+                    hour = int(time_parts[0][-2:])  # Last 2 digits before :
+                    minute = int(time_parts[1][:2])  # First 2 digits after :
+                except ValueError:
+                    pass
+        
+        # Set the time
+        if hour is not None:
+            try:
+                target_time = target_time.replace(hour=hour, minute=minute, second=0, microsecond=0)
+                
+                # If the time is in the past today, move to tomorrow
+                if target_time <= now and "מחר" not in text:
+                    target_time = target_time + timedelta(days=1)
+                
+                logger.info(f"Parsed time: {target_time}")
+                return target_time
+            except ValueError as e:
+                logger.error(f"Invalid time values: hour={hour}, minute={minute}, error={e}")
+        
+        # Default fallback - 1 hour from now
+        logger.warning(f"Could not parse time '{time_str}', using 1 hour from now")
+        return now + timedelta(hours=1)
+
+    def _extract_number(self, text: str) -> int:
+        """Extract number from Hebrew text"""
+        import re
+        
+        # Hebrew number words
+        hebrew_numbers = {
+            "אחת": 1, "שתיים": 2, "שלוש": 3, "ארבע": 4, "חמש": 5,
+            "שש": 6, "שבע": 7, "שמונה": 8, "תשע": 9, "עשר": 10,
+            "אחד עשר": 11, "שתים עשרה": 12, "שלוש עשרה": 13,
+            "ארבע עשרה": 14, "חמש עשרה": 15, "שש עשרה": 16,
+            "שבע עשרה": 17, "שמונה עשרה": 18, "תשע עשרה": 19,
+            "עשרים": 20, "שלושים": 30
+        }
+        
+        # Try Hebrew number words first
+        for hebrew_num, value in hebrew_numbers.items():
+            if hebrew_num in text:
+                return value
+        
+        # Try to extract digits
+        numbers = re.findall(r'\d+', text)
+        if numbers:
+            return int(numbers[0])
+        
+        return None
 
     async def _log_schedule_entry(self, message: Message, command: ScheduleCommand):
         # TODO: Implement schedule logging
