@@ -2,6 +2,7 @@ import logging
 import re
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional, Tuple
+import pytz
 
 from pydantic import BaseModel, Field
 from pydantic_ai import Agent
@@ -20,6 +21,9 @@ from whatsapp.jid import parse_jid
 from .base_handler import BaseHandler
 
 logger = logging.getLogger(__name__)
+
+# User timezone (Jerusalem, Israel)
+USER_TIMEZONE = pytz.timezone('Asia/Jerusalem')
 
 
 class GroceryCommand(BaseModel):
@@ -74,7 +78,42 @@ class FamilyHandler(BaseHandler):
                     message.message_id,
                 )
 
+    def _get_user_now(self) -> datetime:
+        """Get current time in user's timezone (Jerusalem)"""
+        utc_now = datetime.now(timezone.utc)
+        user_now = utc_now.astimezone(USER_TIMEZONE)
+        logger.info(f"User current time (Jerusalem): {user_now.strftime('%d/%m/%Y %H:%M:%S %Z')}")
+        return user_now
+
+    def _to_utc(self, user_time: datetime) -> datetime:
+        """Convert user timezone datetime to UTC for database storage"""
+        if user_time.tzinfo is None:
+            # Assume it's in user timezone if no timezone info
+            user_time = USER_TIMEZONE.localize(user_time)
+        return user_time.astimezone(timezone.utc)
+
+    def _to_user_timezone(self, utc_time: datetime) -> datetime:
+        """Convert UTC datetime to user timezone for display"""
+        if utc_time.tzinfo is None:
+            utc_time = timezone.utc.localize(utc_time)
+        return utc_time.astimezone(USER_TIMEZONE)
+
     async def _is_family_command(self, text: str) -> bool:
+        """Check if message contains family-related keywords in Hebrew or English"""
+        family_keywords = [
+            # English keywords
+            "grocery", "groceries", "shopping", "list", "buy", "store",
+            "remind", "reminder", "remember", "schedule", "due",
+            "baby", "toddler", "feeding", "nap", "diaper", "milestone",
+            "family", "help family",
+            # Hebrew keywords
+            "קניות", "רשימה", "רשימת קניות", "קנה", "קניתי", "לקחתי", "חנות", "סופר",
+            "תזכורת", "תזכיר", "זכור", "לוח זמנים", "מועד",
+            "תינוק", "פעוט", "האכלה", "שינה", "חיתול", "אבן דרך",
+            "משפחה", "עזרה משפחתית", "בוט משפחה"
+        ]
+        text_lower = text.lower()
+        return any(keyword in text_lower for keyword in family_keywords)
         """Check if message contains family-related keywords in Hebrew or English"""
         family_keywords = [
             # English keywords
@@ -109,9 +148,11 @@ class FamilyHandler(BaseHandler):
         """Check if message is reminder-related in Hebrew or English"""
         reminder_keywords = [
             # English
-            "remind", "reminder", "remember", "schedule", "due", "appointment",
+            "remind", "reminder", "remember", "schedule", "due", "appointment", "show",
             # Hebrew - creating reminders
             "תזכורת", "תזכיר", "זכור", "לוח זמנים", "מועד", "פגישה", "זמן",
+            # Hebrew - showing/viewing reminders
+            "תראה", "הצג", "הראה", "הצגת", "רשימת תזכורות", "התזכורות שלי",
             # Hebrew - managing reminders  
             "סיימתי", "עשיתי", "השלמתי", "מחק תזכורת", "תמחק", "הסר תזכורת",
             "תנקה תזכורות", "נקה תזכורות", "מחק תזכורות"
@@ -535,7 +576,8 @@ class FamilyHandler(BaseHandler):
                 logger.info(f"Found item to complete: {grocery_item.item_name}")
                 grocery_item.completed = True
                 grocery_item.completed_by = message.sender_jid
-                grocery_item.completed_at = datetime.now(timezone.utc)
+                # Store completion time in UTC but it represents user's action time
+                grocery_item.completed_at = self._to_utc(self._get_user_now())
                 completed_items.append(grocery_item.item_name)
             else:
                 logger.warning(f"Could not find item '{item}' (cleaned: '{clean_item}') to complete")
@@ -612,27 +654,27 @@ class FamilyHandler(BaseHandler):
         """
         await self.send_message(message.chat_jid, help_text, message.message_id)
 
-    # Reminder functionality - now implemented!
+    # Reminder functionality - now implemented with timezone support!
     async def _add_reminder(self, message: Message, command: ReminderCommand):
-        """Create a new reminder with time parsing"""
+        """Create a new reminder with time parsing and timezone support"""
         try:
-            # Parse the due time
-            due_time = await self._parse_hebrew_time(command.due_time, command.recurring)
+            # Parse the due time (returns UTC for database storage)
+            due_time_utc = await self._parse_hebrew_time(command.due_time, command.recurring)
             
-            if not due_time:
+            if not due_time_utc:
                 await self.send_message(
                     message.chat_jid,
-                    "לא הצלחתי להבין את הזמן. נסה: 'ב5 אחה״צ', 'מחר ב9 בבוקר', או 'בעוד שעתיים'",
+                    "לא הצלחתי להבין את הזמן. נסה: 'ב5 אחה״צ', 'מחר ב9 בבוקר', או 'בעוד שתיים דקות'",
                     message.message_id,
                 )
                 return
             
-            # Create reminder
+            # Create reminder (stored in UTC)
             reminder = Reminder(
                 group_jid=message.group_jid,
                 created_by=message.sender_jid,
                 message=command.message,
-                due_time=due_time,
+                due_time=due_time_utc,
                 recurring_pattern=command.recurring,
                 recurring_interval=1 if command.recurring else None,
             )
@@ -640,11 +682,22 @@ class FamilyHandler(BaseHandler):
             self.session.add(reminder)
             await self.session.commit()
             
-            # Format response
-            time_str = due_time.strftime("%d/%m/%Y %H:%M")
+            # Convert to user timezone for display
+            due_time_user = self._to_user_timezone(due_time_utc)
+            time_str = due_time_user.strftime("%d/%m/%Y %H:%M")
             recurring_str = f" (חוזר {command.recurring})" if command.recurring else ""
             
-            response = f"✅ תזכורת נוצרה:\n📝 {command.message}\n⏰ {time_str}{recurring_str}"
+            # Calculate time until reminder for user feedback
+            now_user = self._get_user_now()
+            time_diff = due_time_user - now_user
+            if time_diff.total_seconds() < 3600:  # Less than 1 hour
+                until_str = f" - בעוד {int(time_diff.total_seconds() / 60)} דקות"
+            elif time_diff.total_seconds() < 86400:  # Less than 1 day
+                until_str = f" - בעוד {int(time_diff.total_seconds() / 3600)} שעות"
+            else:
+                until_str = f" - בעוד {time_diff.days} ימים"
+            
+            response = f"✅ תזכורת נוצרה:\n📝 {command.message}\n⏰ {time_str}{until_str}{recurring_str}"
             await self.send_message(message.chat_jid, response, message.message_id)
             
         except Exception as e:
@@ -656,15 +709,17 @@ class FamilyHandler(BaseHandler):
             )
 
     async def _show_reminders(self, message: Message):
-        """Show current active reminders with improved formatting"""
-        now = datetime.now(timezone.utc)
+        """Show current active reminders with improved formatting and timezone support"""
+        # Use user's current time for calculations
+        now_user = self._get_user_now()
+        now_utc = self._to_utc(now_user)
         
         # Get active (upcoming) reminders
         stmt_active = select(Reminder).where(
             and_(
                 Reminder.group_jid == message.group_jid,
                 Reminder.completed == False,
-                Reminder.due_time > now
+                Reminder.due_time > now_utc  # Compare with UTC in database
             )
         ).order_by(Reminder.due_time)
         
@@ -673,7 +728,7 @@ class FamilyHandler(BaseHandler):
             and_(
                 Reminder.group_jid == message.group_jid,
                 Reminder.completed == False,
-                Reminder.due_time <= now,
+                Reminder.due_time <= now_utc,  # Compare with UTC in database
                 Reminder.sent == False  # Not sent yet
             )
         ).order_by(Reminder.due_time)
@@ -693,8 +748,11 @@ class FamilyHandler(BaseHandler):
             if overdue_reminders:
                 response += "🔴 **תזכורות שפג תוקפן:**\n"
                 for i, reminder in enumerate(overdue_reminders, 1):
-                    time_str = reminder.due_time.strftime("%d/%m %H:%M")
-                    time_diff = now - reminder.due_time
+                    # Convert UTC from database to user timezone for display
+                    due_time_user = self._to_user_timezone(reminder.due_time)
+                    time_str = due_time_user.strftime("%d/%m %H:%M")
+                    
+                    time_diff = now_user - due_time_user
                     if time_diff.total_seconds() < 3600:  # Less than 1 hour
                         overdue_str = f"לפני {int(time_diff.total_seconds() / 60)} דקות"
                     elif time_diff.total_seconds() < 86400:  # Less than 1 day
@@ -709,10 +767,12 @@ class FamilyHandler(BaseHandler):
             if active_reminders:
                 response += "🟢 **תזכורות עתידיות:**\n"
                 for i, reminder in enumerate(active_reminders, 1):
-                    time_str = reminder.due_time.strftime("%d/%m %H:%M")
+                    # Convert UTC from database to user timezone for display
+                    due_time_user = self._to_user_timezone(reminder.due_time)
+                    time_str = due_time_user.strftime("%d/%m %H:%M")
                     
                     # Calculate time until reminder
-                    time_diff = reminder.due_time - now
+                    time_diff = due_time_user - now_user
                     if time_diff.total_seconds() < 3600:  # Less than 1 hour
                         until_str = f"בעוד {int(time_diff.total_seconds() / 60)} דקות"
                     elif time_diff.total_seconds() < 86400:  # Less than 1 day
@@ -768,7 +828,8 @@ class FamilyHandler(BaseHandler):
         
         if reminder:
             reminder.completed = True
-            reminder.completed_at = datetime.now(timezone.utc)
+            # Store completion time in UTC but show user time in response
+            reminder.completed_at = self._to_utc(self._get_user_now())
             await self.session.commit()
             
             response = f"✅ התזכורת הושלמה: {reminder.message}"
@@ -801,14 +862,15 @@ class FamilyHandler(BaseHandler):
         await self.send_message(message.chat_jid, response, message.message_id)
 
     async def _parse_hebrew_time(self, time_str: str, recurring: str = None) -> datetime:
-        """Parse Hebrew time expressions into datetime objects"""
+        """Parse Hebrew time expressions into datetime objects using user's timezone"""
         if not time_str:
             return None
         
-        now = datetime.now(timezone.utc)
+        # Use user's current time instead of UTC
+        now = self._get_user_now()
         text = time_str.lower().strip()
         
-        logger.info(f"Parsing Hebrew time: '{time_str}' -> '{text}'")
+        logger.info(f"Parsing Hebrew time: '{time_str}' -> '{text}' (User time: {now.strftime('%H:%M %Z')})")
         
         # Handle relative times - these should return immediately
         if "בעוד" in text:
@@ -818,24 +880,26 @@ class FamilyHandler(BaseHandler):
                 minutes = self._extract_number(text)
                 logger.info(f"Extracted minutes: {minutes}")
                 result_time = now + timedelta(minutes=minutes or 30)
-                logger.info(f"Relative time result: {result_time}")
-                return result_time
+                logger.info(f"Relative time result (user timezone): {result_time.strftime('%d/%m/%Y %H:%M:%S %Z')}")
+                # Convert to UTC for database storage
+                return self._to_utc(result_time)
             elif "שעות" in text or "שעה" in text:
                 hours = self._extract_number(text)
                 logger.info(f"Extracted hours: {hours}")
                 result_time = now + timedelta(hours=hours or 1)
-                logger.info(f"Relative time result: {result_time}")
-                return result_time
+                logger.info(f"Relative time result (user timezone): {result_time.strftime('%d/%m/%Y %H:%M:%S %Z')}")
+                return self._to_utc(result_time)
             elif "ימים" in text or "יום" in text:
                 days = self._extract_number(text)
                 logger.info(f"Extracted days: {days}")
                 result_time = now + timedelta(days=days or 1)
-                logger.info(f"Relative time result: {result_time}")
-                return result_time
+                logger.info(f"Relative time result (user timezone): {result_time.strftime('%d/%m/%Y %H:%M:%S %Z')}")
+                return self._to_utc(result_time)
             else:
                 # General "בעוד" without specific unit - default to 1 hour
                 logger.info("General 'בעוד' - defaulting to 1 hour")
-                return now + timedelta(hours=1)
+                result_time = now + timedelta(hours=1)
+                return self._to_utc(result_time)
         
         # Handle specific times (only if not relative)
         target_time = now
@@ -894,14 +958,16 @@ class FamilyHandler(BaseHandler):
                 if target_time <= now and "מחר" not in text:
                     target_time = target_time + timedelta(days=1)
                 
-                logger.info(f"Parsed time: {target_time}")
-                return target_time
+                logger.info(f"Parsed time (user timezone): {target_time.strftime('%d/%m/%Y %H:%M:%S %Z')}")
+                # Convert to UTC for database storage
+                return self._to_utc(target_time)
             except ValueError as e:
                 logger.error(f"Invalid time values: hour={hour}, minute={minute}, error={e}")
         
         # Default fallback - 1 hour from now
         logger.warning(f"Could not parse time '{time_str}', using 1 hour from now")
-        return now + timedelta(hours=1)
+        result_time = now + timedelta(hours=1)
+        return self._to_utc(result_time)
 
     def _extract_number(self, text: str) -> int:
         """Extract number from Hebrew text"""
