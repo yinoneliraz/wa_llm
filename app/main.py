@@ -1,6 +1,14 @@
 import asyncio
+import sys
 from contextlib import asynccontextmanager
+from pathlib import Path
 from warnings import warn
+
+# Add src to Python path
+current_dir = Path(__file__).parent.parent
+src_dir = current_dir / "src"
+if str(src_dir) not in sys.path:
+    sys.path.insert(0, str(src_dir))
 
 from fastapi import FastAPI
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
@@ -14,8 +22,38 @@ from config import Settings
 from whatsapp import WhatsAppClient
 from whatsapp.init_groups import gather_groups
 from voyageai.client_async import AsyncClient
+from scheduler.family_scheduler import FamilyScheduler
 
 settings = Settings()  # pyright: ignore [reportCallIssue]
+
+
+async def run_family_scheduler_periodically(async_session, whatsapp):
+    """Background task to run family scheduler every minute"""
+    logger = logging.getLogger(__name__)
+    logger.info("Starting family scheduler background task")
+    
+    while True:
+        try:
+            # Wait 60 seconds before each run
+            await asyncio.sleep(60)
+            
+            # Run scheduler in a new session
+            async with async_session() as session:
+                try:
+                    scheduler = FamilyScheduler(session, whatsapp)
+                    await scheduler.run_periodic_tasks()
+                    await session.commit()
+                except Exception as e:
+                    logger.error(f"Family scheduler task failed: {e}")
+                    await session.rollback()
+                    
+        except asyncio.CancelledError:
+            logger.info("Family scheduler background task cancelled")
+            break
+        except Exception as e:
+            logger.error(f"Unexpected error in family scheduler: {e}")
+            # Continue running even if there's an error
+            await asyncio.sleep(60)
 
 
 @asynccontextmanager
@@ -53,15 +91,29 @@ async def lifespan(app: FastAPI):
     )
 
     asyncio.create_task(gather_groups(engine, app.state.whatsapp))
+    
+    # Start family scheduler background task
+    scheduler_task = asyncio.create_task(
+        run_family_scheduler_periodically(async_session, app.state.whatsapp)
+    )
 
     app.state.db_engine = engine
     app.state.async_session = async_session
     app.state.embedding_client = AsyncClient(
         api_key=settings.voyage_api_key, max_retries=settings.voyage_max_retries
     )
+    app.state.scheduler_task = scheduler_task
+    
     try:
         yield
     finally:
+        # Cancel scheduler task
+        if scheduler_task and not scheduler_task.done():
+            scheduler_task.cancel()
+            try:
+                await scheduler_task
+            except asyncio.CancelledError:
+                pass
         await engine.dispose()
 
 

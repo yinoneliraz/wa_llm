@@ -886,7 +886,12 @@ class FamilyHandler(BaseHandler):
             elif "שעות" in text or "שעה" in text:
                 hours = self._extract_number(text)
                 logger.info(f"Extracted hours: {hours}")
-                result_time = now + timedelta(hours=hours or 1)
+                # Handle fractional hours (like חצי שעה = 0.5 hours = 30 minutes)
+                if hours and hours < 1:
+                    # Convert fractional hours to minutes
+                    result_time = now + timedelta(minutes=hours * 60)
+                else:
+                    result_time = now + timedelta(hours=hours or 1)
                 logger.info(f"Relative time result (user timezone): {result_time.strftime('%d/%m/%Y %H:%M:%S %Z')}")
                 return self._to_utc(result_time)
             elif "ימים" in text or "יום" in text:
@@ -969,7 +974,7 @@ class FamilyHandler(BaseHandler):
         result_time = now + timedelta(hours=1)
         return self._to_utc(result_time)
 
-    def _extract_number(self, text: str) -> int:
+    def _extract_number(self, text: str) -> float:
         """Extract number from Hebrew text"""
         import re
         
@@ -985,7 +990,9 @@ class FamilyHandler(BaseHandler):
             "אחד עשר": 11, "שתים עשרה": 12, "שלוש עשרה": 13,
             "ארבע עשרה": 14, "חמש עשרה": 15, "שש עשרה": 16,
             "שבע עשרה": 17, "שמונה עשרה": 18, "תשע עשרה": 19,
-            "עשרים": 20, "שלושים": 30, "ארבעים": 40, "חמישים": 50
+            "עשרים": 20, "שלושים": 30, "ארבעים": 40, "חמישים": 50,
+            # Fractions
+            "חצי": 0.5, "רבע": 0.25, "שלושת רבעי": 0.75
         }
         
         logger.info(f"Extracting number from: '{text}'")
